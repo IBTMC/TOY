@@ -194,7 +194,7 @@ const SHEETS = {
 
 /* ---------- Point Rules ---------- */
 const POINT_RULES = {
-  earlyAttendance: v => (v === "E0" ? 1 : 0),
+  earlyAttendance: v => (v === "EA0" ? 1 : 0),
   roles: {"MC":3,"GE":2,"TTM":2,"Timer":1,"Ah Counter":1,"Grammarian":1,"Listener":1,"Evaluator":2,"Evaluators' Evaluator":1},
   speech: 3,
   evaluationTrue: 2,
@@ -309,7 +309,7 @@ function scoreExternalText(txt){
 
 /* ---------- Attendance label helper ---------- */
 function attendanceLabel(code){
-  if(code==="E0") return "Early";
+  if(code==="EA0") return "Early";
   if(code==="P") return "Present";
   if(code==="A") return "Absent";
   if(code==="E") return "Excused";
