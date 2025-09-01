@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Toastmaster of the Year Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 font-sans">
+  <!-- Header -->
+  <header class="bg-[#004165] text-white p-4 flex justify-between items-center">
+    <img src="toastmasters-logo.png" alt="Toastmasters Logo" class="h-12">
+    <h1 class="text-2xl font-bold">Toastmaster of the Year Dashboard</h1>
+    <img src="club-logo.png" alt="Club Logo" class="h-12">
+  </header>
+
+  <main class="p-4">
+    <!-- Member Selector -->
+    <div class="mb-4">
+      <label for="memberSelect" class="block mb-2 font-semibold">Select Member:</label>
+      <select id="memberSelect" class="p-2 border rounded w-full md:w-1/3"></select>
+    </div>
+
+    <!-- KPI Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div class="bg-white p-4 rounded shadow">
+        <h2 class="text-lg font-bold">Total Points</h2>
+        <p id="totalPoints" class="text-2xl text-[#772432]"></p>
+      </div>
+      <div class="bg-white p-4 rounded shadow">
+        <h2 class="text-lg font-bold">Meetings Counted</h2>
+        <p id="meetingCount" class="text-2xl text-[#772432]"></p>
+      </div>
+      <div class="bg-white p-4 rounded shadow">
+        <h2 class="text-lg font-bold">Distinct Roles</h2>
+        <p id="roleCount" class="text-2xl text-[#772432]"></p>
+      </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+      <div class="bg-white p-4 rounded shadow">
+        <h2 class="text-lg font-bold mb-2">Category Breakdown</h2>
+        <canvas id="categoryChart"></canvas>
+      </div>
+      <div class="bg-white p-4 rounded shadow">
+        <h2 class="text-lg font-bold mb-2">Cumulative Progress</h2>
+        <canvas id="progressChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Tabs for details -->
+    <div class="mb-4">
+      <div class="flex flex-wrap gap-2 mb-2">
+        <button class="tab-btn px-4 py-2 bg-[#004165] text-white rounded" data-sheet="Role Taking">Roles</button>
+        <button class="tab-btn px-4 py-2 bg-gray-300 rounded" data-sheet="Speeches">Speeches</button>
+        <button class="tab-btn px-4 py-2 bg-gray-300 rounded" data-sheet="Evaluations">Evaluations</button>
+        <button class="tab-btn px-4 py-2 bg-gray-300 rounded" data-sheet="Table Topics">Table Topics</button>
+        <button class="tab-btn px-4 py-2 bg-gray-300 rounded" data-sheet="Early Attendance">Early Attendance</button>
+        <button class="tab-btn px-4 py-2 bg-gray-300 rounded" data-sheet="Awards">Awards</button>
+        <button class="tab-btn px-4 py-2 bg-gray-300 rounded" data-sheet="External">External</button>
+        <button class="tab-btn px-4 py-2 bg-gray-300 rounded" data-sheet="Other">Other</button>
+        <button class="tab-btn px-4 py-2 bg-gray-300 rounded" data-sheet="Last Minute Roles">Last Minute Roles</button>
+      </div>
+      <table id="detailTable" class="display w-full"></table>
+    </div>
+
+    <!-- Leaderboard -->
+    <div class="bg-white p-4 rounded shadow mb-6">
+      <h2 class="text-lg font-bold mb-2">Club Leaderboard</h2>
+      <table id="leaderboard" class="display w-full"></table>
+    </div>
+
+    <!-- Extended Progress Chart -->
+    <div class="bg-white p-4 rounded shadow">
+      <h2 class="text-lg font-bold mb-2">Extended Progress (All Categories)</h2>
+      <canvas id="extendedProgressChart"></canvas>
+    </div>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <script>
+    const SHEET_ID = "19x7OzxLlfG5YarEgksoX-drLaf12Ci98JpYkBvQpoMI";
+    const SHEETS = {
+      summary: "Summary",
+      total: "Total",
+      roles: "Role Taking",
+      speeches: "Speeches",
+      evaluations: "Evaluations",
+      tablet: "Table Topics",
+      early: "Early Attendance",
+      awards: "Awards",
+      external: "External",
+      other: "Other",
+      lastminute: "Last Minute Roles"
+    };
+
+    async function fetchSheet(sheetName) {
+      const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}&cachebuster=${new Date().getTime()}`;
+      const response = await fetch(url);
+      const text = await response.text();
+      return Papa.parse(text, { header: true }).data.filter(row => Object.values(row).some(val => val !== ""));
+    }
+
+    let detailTable;
+    let leaderboardTable;
+    let categoryChart;
+    let progressChart;
+    let extendedProgressChart;
+
+    async function loadSummary() {
+      const data = await fetchSheet(SHEETS.summary);
+      const memberSelect = document.getElementById("memberSelect");
+      memberSelect.innerHTML = data.map(row => `<option value="${row.Name}">${row.Name}</option>`).join("");
+
+      // Leaderboard
+      if (leaderboardTable) leaderboardTable.destroy();
+      leaderboardTable = $('#leaderboard').DataTable({
+        data: data,
+        columns: Object.keys(data[0]).map(key => ({ title: key, data: key }))
+      });
+    }
+
+    async function loadTotal(member) {
+      const data = await fetchSheet(SHEETS.total);
+      const row = data.find(r => r.Name === member);
+      if (!row) return;
+
+      document.getElementById("totalPoints").textContent = row.Total;
+
+      const categories = Object.keys(row).filter(k => k !== "Name" && k !== "Total");
+      const values = categories.map(c => parseInt(row[c] || 0));
+
+      if (categoryChart) categoryChart.destroy();
+      categoryChart = new Chart(document.getElementById("categoryChart"), {
+        type: 'bar',
+        data: { labels: categories, datasets: [{ label: 'Points', data: values, backgroundColor: '#772432' }] },
+        options: { responsive: true, plugins: { legend: { display: false } } }
+      });
+    }
+
+    async function loadDetail(sheetName, member) {
+      const data = await fetchSheet(sheetName);
+      const filtered = data.filter(r => r.Name === member);
+
+      if (detailTable) detailTable.destroy();
+      detailTable = $('#detailTable').DataTable({
+        data: filtered,
+        columns: Object.keys(filtered[0] || {}).map(key => ({ title: key, data: key }))
+      });
+    }
+
+    async function loadExtendedProgress(member) {
+      const datasets = [];
+      const colors = {
+        roles: '#004165',
+        speeches: '#772432',
+        evaluations: '#D9B310',
+        tablet: '#006747',
+        early: '#FF6F61',
+        awards: '#6A1B9A',
+        external: '#FF8F00',
+        other: '#00838F',
+        lastminute: '#C62828'
+      };
+
+      for (let [key, sheetName] of Object.entries(SHEETS)) {
+        if (key === 'summary' || key === 'total') continue;
+        const data = await fetchSheet(sheetName);
+        const filtered = data.filter(r => r.Name === member);
+        const progress = {};
+        filtered.forEach(r => {
+          if (r.Date) {
+            const date = new Date(r.Date);
+            progress[date] = (progress[date] || 0) + (parseInt(r.Points || 1));
+          }
+        });
+        const sortedDates = Object.keys(progress).sort((a,b) => new Date(a)-new Date(b));
+        let cumulative = 0;
+        const points = sortedDates.map(d => { cumulative += progress[d]; return {x:new Date(d), y:cumulative}; });
+
+        datasets.push({
+          label: sheetName,
+          data: points,
+          borderColor: colors[key],
+          fill: false,
+          tension: 0.1
+        });
+      }
+
+      if (extendedProgressChart) extendedProgressChart.destroy();
+      extendedProgressChart = new Chart(document.getElementById("extendedProgressChart"), {
+        type: 'line',
+        data: { datasets },
+        options: { responsive: true, parsing: false, scales: { x: { type: 'time', time: { unit: 'month' } } } }
+      });
+    }
+
+    document.addEventListener("DOMContentLoaded", async () => {
+      await loadSummary();
+      const memberSelect = document.getElementById("memberSelect");
+      const initialMember = memberSelect.value;
+      await loadTotal(initialMember);
+      await loadDetail(SHEETS.roles, initialMember);
+      await loadExtendedProgress(initialMember);
+
+      memberSelect.addEventListener("change", async e => {
+        const member = e.target.value;
+        await loadTotal(member);
+        const activeSheet = document.querySelector(".tab-btn.bg-[#004165]").dataset.sheet;
+        await loadDetail(activeSheet, member);
+        await loadExtendedProgress(member);
+      });
+
+      document.querySelectorAll(".tab-btn").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("bg-[#004165]", "text-white"));
+          document.querySelectorAll(".tab-btn").forEach(b => b.classList.add("bg-gray-300"));
+          btn.classList.add("bg-[#004165]", "text-white");
+          btn.classList.remove("bg-gray-300");
+
+          const member = memberSelect.value;
+          await loadDetail(btn.dataset.sheet, member);
+        });
+      });
+    });
+  </script>
+</body>
+</html>
