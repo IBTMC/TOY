@@ -12,33 +12,78 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
 <style>
-  body { font-family: Arial, sans-serif; margin: 0; background: #f8f9fa; }
-  header { background: #004165; color: white; padding: 10px 20px;
-           display: flex; justify-content: space-between; align-items: center; }
-  header img { height: 50px; }
-  .container { padding: 20px; }
-  .panel { background: white; border-radius: 10px; padding: 15px; margin: 15px 0; box-shadow: 0 2px 6px rgba(0,0,0,0.1);}
-  .kpis { display: flex; gap: 20px; }
-  .kpis .panel { flex: 1; text-align: center; font-size: 1.2em; }
-  .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-  .tabs { display: flex; gap: 10px; margin-bottom: 10px; }
-  .tabs button.active { background: #004165; color: white; }
-  footer { text-align: center; padding: 10px; font-size: 0.9em; color: #555; }
-  .topbar { display: flex; justify-content: space-between; align-items: center; }
-  .filters { display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 20px; }
-  select, input { padding: 5px; }
+  :root{
+    --tm-navy:#004165;
+    --tm-red:#d71a28;
+    --tm-gold:#f2df74;
+    --bg:#f6f7fb;
+    --card:#ffffff;
+    --text:#1d2430;
+    --muted:#6b7280;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial}
+  header{
+    background:var(--tm-navy); color:#fff; padding:14px 18px;
+    display:flex; align-items:center; gap:14px; justify-content:space-between
+  }
+  header .brand{display:flex;align-items:center;gap:12px}
+  header img{height:44px; background:#fff; border-radius:8px; padding:6px}
+  header h1{font-size:20px; margin:0; font-weight:700}
+  .container{max-width:1240px; margin:24px auto; padding:0 16px}
+  .topbar {display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between}
+  .mode-toggle{display:flex; align-items:center; gap:8px; background:var(--card); padding:10px 12px; border-radius:12px; box-shadow:0 6px 18px rgba(0,0,0,.06)}
+  .mode-toggle button{border:none; padding:8px 12px; border-radius:10px; cursor:pointer; font-weight:700}
+  .mode-toggle .active{background:var(--tm-red); color:#fff}
+
+  .filters, .kpis, .charts, .cards, .tabs {margin-top:18px}
+  .panel{
+    background:var(--card); border-radius:14px; padding:14px;
+    box-shadow:0 6px 18px rgba(0,0,0,.06)
+  }
+
+  .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .kpi{display:flex;flex-direction:column;gap:6px}
+  .kpi .label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+  .kpi .value{font-size:28px;font-weight:800;color:var(--tm-navy)}
+
+  .filters .row{display:flex;flex-wrap:wrap;gap:10px}
+  .filters .row > div{flex:1 1 220px}
+  label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
+  select,input[type="date"]{width:100%;padding:10px;border:1px solid #e5e7eb;border-radius:10px;background:#fff}
+
+  .charts{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .charts .panel{min-height:360px}
+  canvas{width:100%;height:280px}
+
+  .cards{display:grid;grid-template-columns:1fr;gap:12px}
+  .leaderboard table{width:100%}
+
+  .tabs{display:flex;flex-wrap:wrap;gap:8px}
+  .tab-btn{
+    border:none;padding:10px 14px;border-radius:10px;cursor:pointer;
+    background:var(--tm-red);color:#fff;font-weight:600
+  }
+  .tab-btn.active{background:var(--tm-navy)}
+  .hidden{display:none !important}
+
+  .error{background:#fff3f3;color:#8a1f1f;border:1px solid #f0c2c2;border-radius:10px;padding:10px;margin-top:12px}
+  footer{margin:32px 0;color:var(--muted);text-align:center;font-size:12px}
+  @media (max-width:980px){ .charts{grid-template-columns:1fr} .kpis{grid-template-columns:1fr} }
 </style>
 </head>
 <body>
 <header>
   <div class="brand">
-    <img src="https://www.toastmasters.org/-/media/toastmasters/brand-portal/files/logos/official-logo/primary-logo-color.ashx" alt="Toastmasters International">
+    <img src="https://www.toastmasters.org/-/media/toastmasters/brand-portal/files/logos/official-logo/primary-logo/primary-logo-color.ashx" alt="Toastmasters International">
     <h1>Toastmasters Club Dashboard</h1>
   </div>
+  <!-- Replace with your club logo file or a hosted URL -->
   <img src="club-logo.png" alt="Club Logo">
 </header>
 
 <div class="container">
+
   <div class="topbar">
     <div class="mode-toggle">
       <span style="font-weight:700;">Display:</span>
@@ -47,43 +92,75 @@
     </div>
   </div>
 
+  <!-- Filters -->
   <div class="filters panel">
-    <div>
-      <label>Select member</label><br>
-      <select id="memberSelect"><option value="">— Select —</option></select>
+    <div class="row">
+      <div>
+        <label for="memberSelect">Select member</label>
+        <select id="memberSelect"><option value="">— Select —</option></select>
+      </div>
+      <div>
+        <label for="roleFilter">Filter by role (optional)</label>
+        <select id="roleFilter"><option value="__ALL__">All roles</option></select>
+      </div>
+      <div>
+        <label for="startDate">Start date</label>
+        <input id="startDate" type="date" />
+      </div>
+      <div>
+        <label for="endDate">End date</label>
+        <input id="endDate" type="date" />
+      </div>
     </div>
-    <div>
-      <label>Filter by role (optional)</label><br>
-      <select id="roleFilter"><option value="">All roles</option></select>
-    </div>
-    <div>
-      <label>Start date</label><br>
-      <input type="date" id="startDate">
-    </div>
-    <div>
-      <label>End date</label><br>
-      <input type="date" id="endDate">
-    </div>
+    <div id="errorBox" class="error hidden"></div>
   </div>
 
+  <!-- KPIs -->
   <div class="kpis">
-    <div class="panel"><div>Meetings Counted</div><div id="kpiMeetings">0</div></div>
-    <div class="panel"><div>Total Points</div><div id="kpiPoints">0</div></div>
-    <div class="panel"><div>Distinct Roles</div><div id="kpiRoles">0</div></div>
+    <div class="kpi panel">
+      <div class="label">Meetings Counted</div>
+      <div id="kpiMeetings" class="value">—</div>
+    </div>
+    <div class="kpi panel">
+      <div class="label">Total Points</div>
+      <div id="kpiPoints" class="value">—</div>
+    </div>
+    <div class="kpi panel">
+      <div class="label">Distinct Roles</div>
+      <div id="kpiRoles" class="value">—</div>
+    </div>
   </div>
 
+  <!-- Charts -->
   <div class="charts">
-    <div class="panel"><h3>Category Breakdown</h3><canvas id="categoryChart"></canvas></div>
-    <div class="panel"><h3>Roles Breakdown</h3><canvas id="roleChart"></canvas></div>
-    <div class="panel" style="grid-column: span 2;"><h3>Cumulative Progress</h3><canvas id="cumulativeChart"></canvas></div>
+    <div class="panel">
+      <h3>Category Breakdown</h3>
+      <canvas id="categoryChart"></canvas>
+    </div>
+    <div class="panel">
+      <h3>Role Breakdown</h3>
+      <canvas id="roleChart"></canvas>
+    </div>
+    <div class="panel" style="grid-column: 1 / -1;">
+      <h3>Cumulative Progress</h3>
+      <canvas id="cumulativeChart"></canvas>
+    </div>
+    <div class="panel leaderboard" style="grid-column: 1 / -1;">
+      <h3>Leaderboard (Club)</h3>
+      <table id="leaderboardTable" class="display"></table>
+    </div>
   </div>
 
-  <div class="panel">
-    <h3>Per-Meeting Details</h3>
-    <div id="meetingDetails"></div>
+  <!-- Per-Meeting Details -->
+  <div class="cards">
+    <div class="panel">
+      <h3>Per-Meeting Details</h3>
+      <div id="meetingSummaries"></div>
+    </div>
   </div>
 
-  <div class="panel">
+  <!-- Raw tabs -->
+  <div class="panel" style="margin-top:12px">
     <div class="tabs">
       <button class="tab-btn active" data-sheet="Total">Total</button>
       <button class="tab-btn" data-sheet="Role Taking">Role Taking</button>
@@ -99,92 +176,553 @@
     <table id="detailTable" class="display" style="width:100%"></table>
   </div>
 
-  <footer>Live from Google Sheets • Toastmasters compliant</footer>
+  <footer>Live from Google Sheets • Toastmasters branding compliant</footer>
 </div>
 
 <script>
-const SHEET_ID = "2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx";
-const DETAIL_TABS = ["Total","Role Taking","Speeches","Evaluations","Level Completions","Awards","ExCom & Sub.","Early Attendance","Other","Last Minute Roles"];
-let cache = {};
+/** ======= CONFIG ======= **/
+/* IMPORTANT: using your published workbook's /d/e/… id with GViz */
+const EXPORT_ID = "2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx";
+const GVIZ_BASE = `https://docs.google.com/spreadsheets/d/e/${EXPORT_ID}/gviz/tq?`;
+const SHEETS = [
+  "Summary","Total","Early Attendance","Role Taking","Last Minute Roles",
+  "Speeches","Evaluations","Level Completions","Awards","ExCom & Sub.","Other"
+];
+const CATEGORY_KEYS = ["Early Attendance","Role Taking","Speeches","Evaluations","Level Completions","Awards","ExCom & Sub.","Contests","External","Other","Last Minute Roles"];
+
+let cache = {};         // sheetName -> array of row objects
+let headers = {};       // sheetName -> array of labels
 let currentMode = "ALL";
 let categoryChart, roleChart, cumulativeChart;
 
-async function fetchGViz(sheetName) {
-  if (cache[sheetName]) return cache[sheetName];
-  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}&tq=select%20*`;
+/** ======= FETCH & PARSE (GViz) ======= **/
+async function fetchSheet(sheetName){
+  if(cache[sheetName]) return cache[sheetName];
+  const url = GVIZ_BASE + new URLSearchParams({ sheet: sheetName, tqx: "out:json", tq: "select *" }).toString();
   const res = await fetch(url);
-  const txt = await res.text();
-  const match = txt.match(/google\.visualization\.Query\.setResponse\(([\s\S]*?)\);/);
-  if (!match) return [];
-  const json = JSON.parse(match[1]);
-  const cols = json.table.cols.map(c => c.label);
-  const rows = json.table.rows.map(r => {
-    const obj = {};
-    (r.c || []).forEach((cell, i) => {
-      obj[cols[i] || `col${i}`] = cell ? (cell.f ?? cell.v ?? "") : "";
+  const text = await res.text();
+  const m = text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*?)\);/);
+  if(!m) { showError(`Failed to parse sheet: ${sheetName}`); return []; }
+  const json = JSON.parse(m[1]);
+  const cols = (json.table.cols||[]).map(c=> c.label || "");
+  headers[sheetName] = cols.slice();
+
+  const rows = (json.table.rows||[]).map(r=>{
+    const obj={};
+    (r.c||[]).forEach((cell,i)=>{
+      const label = cols[i] || `col${i}`;
+      const value = cell ? (cell.f ?? cell.v ?? "") : "";
+      obj[label] = value;
+      if(label==="ExCom & Sub.") obj["ExCom_And_Sub"] = value; // safe alias
     });
+    if(obj["ExCom_And_Sub"]===undefined) obj["ExCom_And_Sub"] = obj["ExCom & Sub."] ?? "";
     return obj;
   });
+
   cache[sheetName] = rows;
   return rows;
 }
 
-function cleanedRows(rows) {
-  return rows.filter(r => r.Name && String(r.Name).trim());
+function cleanedRows(rows){
+  // Drop the 2nd "Meeting #" header row (empty Name)
+  return (rows||[]).filter(r=> r.Name && String(r.Name).trim()!=="");
 }
 
-async function populateMemberFilter() {
-  const rows = cleanedRows(await fetchGViz("Total"));
-  const members = [...new Set(rows.map(r => r.Name))];
-  const sel = document.getElementById("memberSelect");
-  sel.innerHTML = `<option value="">— Select —</option>` + members.map(m => `<option>${m}</option>`).join("");
+function parseHeaderDate(lbl){
+  if(!lbl) return null;
+  const d = new Date(lbl);
+  if(!isNaN(d)) return d;
+  const m = String(lbl).trim().match(/^(\d{1,2})[-\/ ]([A-Za-z]{3})[-\/ ](\d{2,4})$/);
+  if(m){
+    const map={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+    const y = (+m[3]<100)?2000+(+m[3]):(+m[3]);
+    return new Date(y, map[m[2]], +m[1]);
+  }
+  return null;
 }
-async function populateRoleFilter() {
-  const rows = await fetchGViz("Role Taking");
+function dateColumns(rows){
+  const sample = rows[0] || {};
+  return Object.keys(sample).filter(k=> k!=="Name" && k!=="Points" && parseHeaderDate(k));
+}
+function inRange(d, start, end){
+  if(!d) return false;
+  if(start && d < start) return false;
+  if(end && d > end) return false;
+  return true;
+}
+function toISO(d){ return d.toISOString().slice(0,10); }
+
+/** ======= FILTER POPULATION ======= **/
+async function populateMembers(){
+  const total = await fetchSheet("Total");
+  const members = Array.from(new Set(total.map(r=> String(r.Name||"").trim()).filter(Boolean))).sort((a,b)=>a.localeCompare(b));
+  const sel = document.getElementById('memberSelect');
+  sel.innerHTML = `<option value="">— Select —</option>` + members.map(m=>`<option value="${m}">${m}</option>`).join('');
+}
+async function populateRoles(){
   const roles = new Set();
-  rows.forEach(r => { Object.values(r).forEach(v => { if (v && typeof v === "string") roles.add(v); }); });
-  const sel = document.getElementById("roleFilter");
-  sel.innerHTML = `<option value="">All roles</option>` + [...roles].map(r => `<option>${r}</option>`).join("");
-}
-async function loadDetailTable(sheetName, member) {
-  const rows = await fetchGViz(sheetName);
-  const headers = Object.keys(rows[0] || {});
-  const data = rows.filter(r => !member || r.Name === member).map(r => headers.map(h => r[h]));
-  if ($.fn.dataTable.isDataTable("#detailTable")) $("#detailTable").DataTable().destroy();
-  $("#detailTable").empty();
-  $("#detailTable").DataTable({ data, columns: headers.map(h => ({title:h})) });
+
+  const addRolesFromSheet = async (name)=>{
+    const rows = cleanedRows(await fetchSheet(name));
+    rows.forEach(row=>{
+      Object.entries(row).forEach(([k,v])=>{
+        if(k==="Name"||k==="Points") return;
+        const d = parseHeaderDate(k); if(!d) return;
+        const val = String(v||"").trim();
+        if(val) roles.add(val);
+      });
+    });
+  };
+  await addRolesFromSheet("Role Taking");
+  await addRolesFromSheet("Last Minute Roles");
+
+  // Speaker?
+  const sp = cleanedRows(await fetchSheet("Speeches"));
+  let hasSpeaker=false;
+  sp.forEach(row=>{
+    Object.entries(row).forEach(([k,v])=>{
+      if(k==="Name"||k==="Points") return;
+      const d=parseHeaderDate(k); if(!d) return;
+      if(String(v||"").trim()) hasSpeaker=true;
+    });
+  });
+  if(hasSpeaker) roles.add("Speaker");
+
+  // Evaluator?
+  const ev = cleanedRows(await fetchSheet("Evaluations"));
+  let hasEval=false;
+  ev.forEach(row=>{
+    Object.entries(row).forEach(([k,v])=>{
+      if(k==="Name"||k==="Points") return;
+      const d=parseHeaderDate(k); if(!d) return;
+      const val=(typeof v==="string")?v.trim().toUpperCase():v;
+      if(val===true || val==="TRUE") hasEval=true;
+    });
+  });
+  if(hasEval) roles.add("Evaluator");
+
+  const sel = document.getElementById('roleFilter');
+  sel.innerHTML = `<option value="__ALL__">All roles</option>` + [...roles].sort().map(r=>`<option value="${r}">${r}</option>`).join('');
 }
 
-async function recomputeAll() {
-  const member = document.getElementById("memberSelect").value || null;
-  await loadDetailTable(document.querySelector(".tab-btn.active").dataset.sheet, member);
-  // KPIs etc can be filled here
+/** ======= KPIs ======= **/
+async function updateKPIs(member, start, end, roleFilter){
+  // Meetings Counted: Early Attendance (row 3+ col 3+), non-empty && not A/E
+  const ea = cleanedRows(await fetchSheet("Early Attendance"));
+  let meetCount = 0;
+  if(member){
+    const row = ea.find(r=>r.Name===member) || {};
+    Object.entries(row).forEach(([k,v])=>{
+      if(k==="Name"||k==="Points") return;
+      const d = parseHeaderDate(k); if(!d) return;
+      if(!inRange(d,start,end)) return;
+      const val = String(v||"").trim().toUpperCase();
+      if(val && val!=="A" && val!=="E") meetCount += 1;
+    });
+  }else{
+    // all members → meetings counted = distinct meeting columns in range (considered counted if any member present)
+    const cols = dateColumns(ea);
+    const dates = cols.map(parseHeaderDate).filter(Boolean).filter(d=>inRange(d,start,end));
+    meetCount = dates.length;
+  }
+  document.getElementById('kpiMeetings').textContent = meetCount || 0;
+
+  // Total Points
+  const total = await fetchSheet("Total");
+  let points = 0;
+  if(member){
+    const r = total.find(x=>x.Name===member);
+    points = r && r.Points ? Number(r.Points) : 0;
+  }else{
+    points = total.reduce((s,r)=> s + Number(r.Points||0), 0);
+  }
+  document.getElementById('kpiPoints').textContent = points;
+
+  // Distinct Roles across RT + Last Minute + Speaker + Evaluator (respect filters/date)
+  const distinct = new Set();
+  const addRole = (role)=>{ if(role) distinct.add(role); };
+
+  const takeFrom = async (sheet, roleMapFn=null)=>{
+    const rows = cleanedRows(await fetchSheet(sheet));
+    const subset = member ? rows.filter(r=>r.Name===member) : rows;
+    subset.forEach(row=>{
+      Object.entries(row).forEach(([k,v])=>{
+        if(k==="Name"||k==="Points") return;
+        const d=parseHeaderDate(k); if(!d) return;
+        if(!inRange(d,start,end)) return;
+        let role = (roleMapFn? roleMapFn(v): String(v||"").trim());
+        if(!role) return;
+        if(roleFilter && roleFilter!=="__ALL__" && role!==roleFilter) return;
+        addRole(role);
+      });
+    });
+  };
+
+  await takeFrom("Role Taking");
+  await takeFrom("Last Minute Roles");
+
+  // Speaker
+  await takeFrom("Speeches", (v)=> String(v||"").trim() ? "Speaker" : "");
+  // Evaluator
+  const evRows = cleanedRows(await fetchSheet("Evaluations"));
+  (member ? evRows.filter(r=>r.Name===member) : evRows).forEach(row=>{
+    Object.entries(row).forEach(([k,v])=>{
+      if(k==="Name"||k==="Points") return;
+      const d=parseHeaderDate(k); if(!d) return;
+      if(!inRange(d,start,end)) return;
+      const val=(typeof v==="string")?v.trim().toUpperCase():v;
+      if(val===true || val==="TRUE"){
+        if(!roleFilter || roleFilter==="__ALL__" || roleFilter==="Evaluator") addRole("Evaluator");
+      }
+    });
+  });
+
+  document.getElementById('kpiRoles').textContent = distinct.size;
 }
 
-async function initAll() {
-  await Promise.all(DETAIL_TABS.map(fn => fetchGViz(fn)));
-  await fetchGViz("Summary");
-  await populateMemberFilter();
-  await populateRoleFilter();
-  await recomputeAll();
+/** ======= CHARTS ======= **/
+function resetChart(c){ if(c) c.destroy(); }
 
-  document.querySelectorAll("#memberSelect, #roleFilter, #startDate, #endDate").forEach(el => el.addEventListener("change", recomputeAll));
-  document.querySelectorAll(".tab-btn").forEach(btn => btn.addEventListener("click", async () => {
-    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
-    btn.classList.add("active");
+// Category Breakdown: from Total (member row, or club sum)
+async function drawCategoryChart(member){
+  const total = await fetchSheet("Total");
+  let items;
+  if(member){
+    const r = total.find(x=>x.Name===member) || {};
+    items = CATEGORY_KEYS.filter(k=>k in r).map(k=>({label:k, value:Number(r[k]||0)}));
+  }else{
+    const sums = {}; CATEGORY_KEYS.forEach(k=>sums[k]=0);
+    total.forEach(r=> CATEGORY_KEYS.forEach(k=> sums[k]+=Number(r[k]||0)));
+    items = CATEGORY_KEYS.map(k=>({label:k, value:sums[k]}));
+  }
+  const ctx = document.getElementById('categoryChart').getContext('2d');
+  resetChart(categoryChart);
+  categoryChart = new Chart(ctx, {
+    type:"bar",
+    data:{ labels:items.map(i=>i.label), datasets:[{label:"Points", data:items.map(i=>i.value)}] },
+    options:{ responsive:true, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}} }
+  });
+}
+
+// Role Breakdown Pie
+async function drawRoleChart(member, start, end, roleFilter){
+  const counts = {};
+  const bump = r => counts[r]=(counts[r]||0)+1;
+
+  const addFrom = async (sheet, mapFn=null)=>{
+    const rows = cleanedRows(await fetchSheet(sheet));
+    (member ? rows.filter(r=>r.Name===member) : rows).forEach(row=>{
+      Object.entries(row).forEach(([k,v])=>{
+        if(k==="Name"||k==="Points") return;
+        const d=parseHeaderDate(k); if(!d) return;
+        if(!inRange(d,start,end)) return;
+        const role = mapFn ? mapFn(v) : String(v||"").trim();
+        if(!role) return;
+        if(roleFilter && roleFilter!=="__ALL__" && !["Speaker","Evaluator"].includes(role) && role!==roleFilter) return;
+        bump(role);
+      });
+    });
+  };
+
+  await addFrom("Role Taking");
+  await addFrom("Last Minute Roles");
+  await addFrom("Speeches", v => String(v||"").trim() ? "Speaker" : "");
+  const ev = cleanedRows(await fetchSheet("Evaluations"));
+  (member ? ev.filter(r=>r.Name===member) : ev).forEach(row=>{
+    Object.entries(row).forEach(([k,v])=>{
+      if(k==="Name"||k==="Points") return;
+      const d=parseHeaderDate(k); if(!d) return;
+      if(!inRange(d,start,end)) return;
+      const val=(typeof v==="string")?v.trim().toUpperCase():v;
+      if(val===true || val==="TRUE"){
+        if(!roleFilter || roleFilter==="__ALL__" || roleFilter==="Evaluator") bump("Evaluator");
+      }
+    });
+  });
+
+  const ctx = document.getElementById('roleChart').getContext('2d');
+  resetChart(roleChart);
+  roleChart = new Chart(ctx, {
+    type:"pie",
+    data:{ labels:Object.keys(counts), datasets:[{ data:Object.values(counts) }] },
+    options:{ responsive:true, plugins:{ legend:{position:"bottom"} } }
+  });
+}
+
+// Cumulative Progress (activity units over time across categories)
+async function drawCumulative(member, start, end, roleFilter){
+  const buckets={};
+  const add=(d)=>{ const k=toISO(d); buckets[k]=(buckets[k]||0)+1; };
+
+  const consider = async (sheet, mapFn=null)=>{
+    const rows = cleanedRows(await fetchSheet(sheet));
+    (member ? rows.filter(r=>r.Name===member) : rows).forEach(row=>{
+      Object.entries(row).forEach(([k,v])=>{
+        if(k==="Name"||k==="Points") return;
+        const d=parseHeaderDate(k); if(!d) return;
+        if(!inRange(d,start,end)) return;
+        const val = mapFn ? mapFn(v) : String(v||"").trim();
+        if(!val) return;
+        if(roleFilter && roleFilter!=="__ALL__"){
+          const asRole = mapFn ? val : String(v||"").trim();
+          if(!["Speaker","Evaluator"].includes(asRole) && asRole!==roleFilter) return;
+        }
+        add(d);
+      });
+    });
+  };
+
+  await consider("Role Taking");
+  await consider("Last Minute Roles");
+  await consider("Speeches", v=> String(v||"").trim() ? "Speaker" : "");
+  const ev = cleanedRows(await fetchSheet("Evaluations"));
+  (member ? ev.filter(r=>r.Name===member) : ev).forEach(row=>{
+    Object.entries(row).forEach(([k,v])=>{
+      if(k==="Name"||k==="Points") return;
+      const d=parseHeaderDate(k); if(!d) return;
+      if(!inRange(d,start,end)) return;
+      const val=(typeof v==="string")?v.trim().toUpperCase():v;
+      if(val===true || val==="TRUE"){
+        if(!roleFilter || roleFilter==="__ALL__" || roleFilter==="Evaluator") add(d);
+      }
+    });
+  });
+
+  const labels = Object.keys(buckets).sort();
+  let cum=0; const values = labels.map(k=> (cum += buckets[k]));
+
+  const ctx = document.getElementById('cumulativeChart').getContext('2d');
+  resetChart(cumulativeChart);
+  cumulativeChart = new Chart(ctx, {
+    type:"line",
+    data:{ labels, datasets:[{label:"Cumulative Activities", data:values, fill:false}] },
+    options:{ responsive:true, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}} }
+  });
+}
+
+/** ======= LEADERBOARD ======= **/
+async function buildLeaderboard(){
+  let rows = await fetchSheet("Summary");
+  if(!rows || !rows.length) rows = await fetchSheet("Total");
+  const data = rows
+    .filter(r=>r.Name)
+    .map(r=>({ Name:r.Name, Points:Number(r.Points||0) }))
+    .sort((a,b)=>b.Points-a.Points);
+
+  if ($.fn.DataTable.isDataTable("#leaderboardTable")) {
+    $("#leaderboardTable").DataTable().clear().rows.add(data).draw();
+  } else {
+    $("#leaderboardTable").DataTable({
+      data,
+      columns:[{title:"Member",data:"Name"},{title:"Points",data:"Points"}],
+      paging:false, searching:false, info:false, order:[[1,"desc"]]
+    });
+  }
+}
+
+/** ======= RAW TAB TABLE ======= **/
+function buildColumnsFor(sheetName, rows){
+  if(!rows.length) return [];
+  const keys = Object.keys(rows[0]);
+  return keys.map(k=>{
+    if(sheetName==="Total" && k==="ExCom & Sub.") return { title:"ExCom & Sub.", data:"ExCom_And_Sub" };
+    return { title:k, data:k };
+  });
+}
+async function loadDetailTable(sheetName, member){
+  const raw = await fetchSheet(sheetName);
+  const rows = (sheetName==="Total") ? raw : cleanedRows(raw);
+  const filtered = member ? rows.filter(r=>r.Name===member) : rows;
+
+  if ($.fn.DataTable.isDataTable("#detailTable")) {
+    $("#detailTable").DataTable().destroy();
+    $("#detailTable").empty();
+  }
+  if(!filtered.length){
+    $("#detailTable").DataTable({ data:[], columns:[{title:"No data", data:null}], paging:false, searching:false, info:false });
+    return;
+  }
+  if(sheetName==="Total"){
+    filtered.forEach(r=>{ if(r["ExCom_And_Sub"]===undefined) r["ExCom_And_Sub"]=r["ExCom & Sub."] ?? ""; });
+  }
+  const cols = buildColumnsFor(sheetName, filtered);
+  $("#detailTable").DataTable({ data:filtered, columns:cols, pageLength:10 });
+}
+
+/** ======= MEETING DETAILS (per member) ======= **/
+async function renderMeetingDetails(member, start, end, roleFilter){
+  const container = document.getElementById('meetingSummaries');
+  container.innerHTML = "";
+  if(!member){ container.innerHTML = "<p>Select a member to see per-meeting details.</p>"; return; }
+
+  const byDay = {};
+  const add = (d, txt)=>{ const k=toISO(d); if(!byDay[k]) byDay[k]=[]; byDay[k].push(txt); };
+
+  // Role Taking
+  const rt = cleanedRows(await fetchSheet("Role Taking"));
+  const rtRow = rt.find(r=>r.Name===member) || {};
+  Object.entries(rtRow).forEach(([k,v])=>{
+    if(k==="Name"||k==="Points") return;
+    const d=parseHeaderDate(k); if(!d) return;
+    if(!inRange(d,start,end)) return;
+    const val=String(v||"").trim(); if(!val) return;
+    if(roleFilter && roleFilter!=="__ALL__" && !["Speaker","Evaluator"].includes(roleFilter) && val!==roleFilter) return;
+    add(d, `Role: ${val}`);
+  });
+
+  // Last Minute Roles
+  const lm = cleanedRows(await fetchSheet("Last Minute Roles"));
+  const lmRow = lm.find(r=>r.Name===member) || {};
+  Object.entries(lmRow).forEach(([k,v])=>{
+    if(k==="Name"||k==="Points") return;
+    const d=parseHeaderDate(k); if(!d) return;
+    if(!inRange(d,start,end)) return;
+    const val=String(v||"").trim(); if(!val) return;
+    if(roleFilter && roleFilter!=="__ALL__" && !["Speaker","Evaluator"].includes(roleFilter) && val!==roleFilter) return;
+    add(d, `Last Minute: ${val}`);
+  });
+
+  // Speeches
+  const sp = cleanedRows(await fetchSheet("Speeches"));
+  const spRow = sp.find(r=>r.Name===member) || {};
+  Object.entries(spRow).forEach(([k,v])=>{
+    if(k==="Name"||k==="Points") return;
+    const d=parseHeaderDate(k); if(!d) return;
+    if(!inRange(d,start,end)) return;
+    if(!String(v||"").trim()) return;
+    if(roleFilter && roleFilter!=="__ALL__" && roleFilter!=="Speaker") return;
+    add(d, `Speaker: ${String(v)}`);
+  });
+
+  // Evaluations
+  const ev = cleanedRows(await fetchSheet("Evaluations"));
+  const evRow = ev.find(r=>r.Name===member) || {};
+  Object.entries(evRow).forEach(([k,v])=>{
+    if(k==="Name"||k==="Points") return;
+    const d=parseHeaderDate(k); if(!d) return;
+    if(!inRange(d,start,end)) return;
+    const val=(typeof v==="string")?v.trim().toUpperCase():v;
+    if(!(val===true || val==="TRUE")) return;
+    if(roleFilter && roleFilter!=="__ALL__" && roleFilter!=="Evaluator") return;
+    add(d, `Evaluator: ✓`);
+  });
+
+  // Other categories (when no role filter)
+  if(!roleFilter || roleFilter==="__ALL__"){
+    for(const tab of ["Level Completions","Awards","ExCom & Sub.","Early Attendance","Other"]){
+      const rows = cleanedRows(await fetchSheet(tab));
+      const row = rows.find(r=>r.Name===member) || {};
+      Object.entries(row).forEach(([k,v])=>{
+        if(k==="Name"||k==="Points") return;
+        const d=parseHeaderDate(k); if(!d) return;
+        if(!inRange(d,start,end)) return;
+        if(!String(v||"").trim()) return;
+        add(d, `${tab}: ${v}`);
+      });
+    }
+  }
+
+  const days = Object.keys(byDay).sort();
+  if(!days.length){ container.innerHTML = "<p>No meeting activity for current filters.</p>"; return; }
+  days.forEach(day=>{
+    const div = document.createElement('div');
+    div.className="meeting panel";
+    div.style.marginBottom="10px";
+    div.innerHTML = `<strong>${day}</strong><ul>${byDay[day].map(x=>`<li>${x}</li>`).join("")}</ul>`;
+    container.appendChild(div);
+  });
+}
+
+/** ======= DATE DEFAULTS ======= **/
+async function setDefaultDates(){
+  const rt = await fetchSheet("Role Taking");
+  const dates = dateColumns(rt).map(parseHeaderDate).filter(Boolean).sort((a,b)=>a-b);
+  if(!dates.length) return;
+  document.getElementById('startDate').value = toISO(dates[0]);
+  document.getElementById('endDate').value = toISO(dates[dates.length-1]);
+}
+
+/** ======= ENGINE ======= **/
+async function recomputeAll(){
+  const member = document.getElementById('memberSelect').value || "";
+  const roleFilter = document.getElementById('roleFilter').value;
+  const start = document.getElementById('startDate').value ? new Date(document.getElementById('startDate').value) : null;
+  const end   = document.getElementById('endDate').value ? new Date(document.getElementById('endDate').value) : null;
+
+  if(currentMode==="MEMBER" && !member){
+    document.getElementById('kpiMeetings').textContent = "—";
+    document.getElementById('kpiPoints').textContent = "—";
+    document.getElementById('kpiRoles').textContent = "—";
+    if(categoryChart) categoryChart.destroy();
+    if(roleChart) roleChart.destroy();
+    if(cumulativeChart) cumulativeChart.destroy();
+    document.getElementById('meetingSummaries').innerHTML = "<p>Select a member to see details.</p>";
+  }else{
+    await updateKPIs(member || null, start, end, roleFilter);
+    await drawCategoryChart(member || null);
+    await drawRoleChart(member || null, start, end, roleFilter);
+    await drawCumulative(member || null, start, end, roleFilter);
+    await renderMeetingDetails(member || null, start, end, roleFilter);
+  }
+
+  const activeBtn = document.querySelector('.tab-btn.active');
+  if (activeBtn){
+    await loadDetailTable(activeBtn.dataset.sheet, member || null);
+  }
+}
+
+/** ======= INIT ======= **/
+function showError(msg){ const box=document.getElementById('errorBox'); box.textContent=msg; box.classList.remove('hidden'); }
+function clearError(){ document.getElementById('errorBox').classList.add('hidden'); }
+
+document.addEventListener('DOMContentLoaded', async ()=>{
+  try{
+    clearError();
+    // Preload all sheets first (prevents empty dropdowns)
+    await Promise.all(SHEETS.map(s=>fetchSheet(s)));
+
+    await populateMembers();
+    await populateRoles();
+    await setDefaultDates();
+    await buildLeaderboard();
+
+    // Initial views
+    await loadDetailTable('Total', null);
     await recomputeAll();
-  }));
-  document.getElementById("modeAll").addEventListener("click", async () => {
-    currentMode="ALL"; document.getElementById("modeAll").classList.add("active");
-    document.getElementById("modeMember").classList.remove("active"); recomputeAll();
-  });
-  document.getElementById("modeMember").addEventListener("click", async () => {
-    currentMode="MEMBER"; document.getElementById("modeMember").classList.add("active");
-    document.getElementById("modeAll").classList.remove("active"); recomputeAll();
-  });
-}
 
-document.addEventListener("DOMContentLoaded", initAll);
+    // Listeners
+    document.getElementById('memberSelect').addEventListener('change', recomputeAll);
+    document.getElementById('roleFilter').addEventListener('change', recomputeAll);
+    document.getElementById('startDate').addEventListener('change', recomputeAll);
+    document.getElementById('endDate').addEventListener('change', recomputeAll);
+
+    document.querySelectorAll('.tab-btn').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+        btn.classList.add('active');
+        const member = document.getElementById('memberSelect').value || null;
+        await loadDetailTable(btn.dataset.sheet, member);
+      });
+    });
+
+    document.getElementById('modeAll').addEventListener('click', async ()=>{
+      currentMode = "ALL";
+      document.getElementById('modeAll').classList.add('active');
+      document.getElementById('modeMember').classList.remove('active');
+      await recomputeAll();
+    });
+    document.getElementById('modeMember').addEventListener('click', async ()=>{
+      currentMode = "MEMBER";
+      document.getElementById('modeMember').classList.add('active');
+      document.getElementById('modeAll').classList.remove('active');
+      await recomputeAll();
+    });
+
+  }catch(e){
+    console.error(e);
+    showError("Initialization error. Check that the Google Sheet is published and sheet names match exactly.");
+  }
+});
 </script>
 </body>
 </html>
