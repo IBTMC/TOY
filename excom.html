@@ -158,6 +158,20 @@ function toggleSection(header) {
   }
 }
 
+
+/* Per-meeting table squeezed for better fit */
+#perMeetingTable th, #perMeetingTable td {
+  padding: 4px 6px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+@media (max-width:600px) {
+  #perMeetingTable th, #perMeetingTable td {
+    font-size: 12px;
+    padding: 3px 4px;
+  }
+}
+
 </style>
 </head>
 <body>
