@@ -46,9 +46,25 @@
     display:flex; align-items:center; justify-content:center; gap:12px;
     padding:10px 16px; color:#fff; position:relative;
   }
-  .tmhdr .logo { position:absolute; left:16px; top:50%; transform:translateY(-50%); height:40px; width:auto; }
-  .tmhdr h1 { margin:0; font-size:clamp(18px,2.2vw,24px); font-weight:700; text-align:center; letter-spacing:.2px; }
+.tmhdr .logo {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 40px;
+  width: auto;
+}
 
+@media (max-width: 480px) {
+  .tmhdr .logo {
+    height: 28px;    /* smaller logo */
+    left: 8px;       /* closer to edge */
+  }
+  .tmhdr h1 {
+    font-size: 16px; /* reduce text size to avoid overlap */
+    margin-left: 36px; /* push text slightly right */
+  }
+}
   /* Tabs */
   .tabs { display:flex; gap:8px; justify-content:center; flex-wrap:wrap; padding:10px 16px; }
   .tab-btn {
@@ -69,6 +85,13 @@
     transition:transform .15s ease, box-shadow .2s ease;
   }
   .card:hover { transform:translateY(-2px); box-shadow:var(--tm-shadow-hover); }
+  /* Responsive DataTables inside cards */
+  .card table {
+  width: 100% !important;
+  display: block;
+  overflow-x: auto;   /* scroll horizontally if needed */
+  -webkit-overflow-scrolling: touch;
+}
 
   /* KPI grid */
   .kpis { display:grid; grid-template-columns:repeat(4,minmax(140px,1fr)); gap:10px; }
