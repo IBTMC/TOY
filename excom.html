@@ -172,6 +172,28 @@ function toggleSection(header) {
   }
 }
 
+
+/* === Mobile-only fixes (phones) === */
+@media (max-width: 600px) {
+  /* Reorder sections on the Member Profile tab so Awards appears above Levels */
+  #tab-profile { display: flex; flex-direction: column; gap: 10px; }
+  #awardsSection { order: 20; }
+  #levelsSection { order: 21; }
+  #perMeetingSection { order: 22; }
+
+  /* Squeeze Per-meeting Details table */
+  #perMeetingTable th,
+  #perMeetingTable td {
+    padding: 3px 4px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  /* Fallback horizontal scroll if content still too wide */
+  #perMeetingSection .dataTables_wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  #perMeetingSection table { width: max-content; }
+}
+
 </style>
 </head>
 <body>
