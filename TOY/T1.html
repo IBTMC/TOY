@@ -53,6 +53,12 @@
       </div>
     </div>
 
+    <!-- Role Breakdown Pie Chart -->
+    <div class="bg-white p-4 rounded shadow mb-6">
+      <h2 class="text-lg font-bold mb-2">Role Breakdown</h2>
+      <canvas id="rolePieChart"></canvas>
+    </div>
+
     <!-- Tabs for details -->
     <div class="mb-4">
       <div class="flex flex-wrap gap-2 mb-2">
@@ -111,6 +117,7 @@
     let categoryChart;
     let progressChart;
     let extendedProgressChart;
+    let rolePieChart;
 
     async function loadSummary() {
       const data = await fetchSheet(SHEETS.summary);
@@ -152,6 +159,19 @@
         data: filtered,
         columns: Object.keys(filtered[0] || {}).map(key => ({ title: key, data: key }))
       });
+
+      if (sheetName === SHEETS.roles) {
+        const roleCounts = {};
+        filtered.forEach(r => {
+          if (r.Role) roleCounts[r.Role] = (roleCounts[r.Role] || 0) + 1;
+        });
+        if (rolePieChart) rolePieChart.destroy();
+        rolePieChart = new Chart(document.getElementById("rolePieChart"), {
+          type: 'pie',
+          data: { labels: Object.keys(roleCounts), datasets: [{ data: Object.values(roleCounts), backgroundColor: ['#004165','#772432','#D9B310','#006747','#FF6F61','#6A1B9A','#FF8F00','#00838F','#C62828'] }] },
+          options: { responsive: true }
+        });
+      }
     }
 
     async function loadExtendedProgress(member) {
