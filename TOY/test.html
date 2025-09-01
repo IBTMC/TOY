@@ -2,226 +2,162 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Toastmasters Dashboard</title>
+  <title>Toastmasters of the Year Tracker</title>
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-  <script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.min.js"></script>
-  <link rel="stylesheet" href="https://cdn.datatables.net/1.11.5/css/jquery.dataTables.min.css">
+  <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <style>
-    body { font-family: Arial, sans-serif; margin:0; padding:0; background:#f9f9f9; }
-    header { background:#772432; color:#fff; padding:10px 20px; display:flex; align-items:center; }
-    header img { height:50px; margin-right:20px; }
-    header h1 { flex:1; font-size:20px; }
-    .container { padding:20px; }
-    .filters { margin-bottom:20px; display:flex; gap:20px; flex-wrap:wrap; }
-    .kpis { display:flex; gap:20px; margin-bottom:20px; }
-    .kpi { flex:1; background:#fff; padding:15px; border-radius:8px; box-shadow:0 2px 4px rgba(0,0,0,0.1); text-align:center; }
-    .tabs { margin-bottom:20px; }
-    .tabs button { padding:10px 15px; border:none; background:#004165; color:#fff; cursor:pointer; }
-    .tabs button.active { background:#0072ce; }
-    .tabcontent { display:none; }
-    .tabcontent.active { display:block; }
-    canvas { background:#fff; border-radius:8px; padding:10px; }
+    body { font-family: Arial, sans-serif; background:#f9f9f9; margin:0; padding:20px; }
+    header { background:#004165; color:white; padding:15px; border-radius:8px; }
+    h1 { margin:0; font-size:22px; }
+    .filters, .stats { margin:15px 0; }
+    .filters select, .filters input { margin-right:10px; }
+    .stats { display:flex; gap:20px; }
+    .stat-card { background:white; padding:10px 15px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.1); }
+    .tab-buttons { margin:15px 0; }
+    .tab-buttons button { margin-right:8px; padding:6px 12px; border:none; border-radius:5px; background:#004165; color:white; cursor:pointer; }
+    .tab-buttons button.active { background:#d71e28; }
+    .tab-content { display:none; }
+    .tab-content.active { display:block; }
+    table { width:100%; border-collapse:collapse; margin-top:15px; }
+    table th, table td { border:1px solid #ccc; padding:6px; }
   </style>
 </head>
 <body>
 <header>
-  <img src="https://www.toastmasters.org/~/media/Toastmasters/Branding/logo/Toastmasters_Logo_Horizontal_RGB.ashx" alt="TM Logo">
-  <h1>Toastmasters Club Dashboard</h1>
-  <img src="https://via.placeholder.com/120x50.png?text=Club+Logo" alt="Club Logo">
+  <h1>Toastmasters of the Year Tracker</h1>
 </header>
 
-<div class="container">
-  <div class="filters">
-    <label> Select Member:
-      <select id="memberSelect"><option value="">— Select —</option></select>
-    </label>
-    <label> Filter by Role:
-      <select id="roleSelect"><option value="">All Roles</option></select>
-    </label>
-    <label> Start date: <input type="date" id="startDate"> </label>
-    <label> End date: <input type="date" id="endDate"> </label>
-  </div>
+<div class="filters">
+  <label>Select member:
+    <select id="memberSelect"><option value="">— Select —</option></select>
+  </label>
+  <label>Filter by role:
+    <select id="roleSelect"><option value="">All roles</option></select>
+  </label>
+  <label>Start date: <input type="date" id="startDate"></label>
+  <label>End date: <input type="date" id="endDate"></label>
+</div>
 
-  <div class="kpis">
-    <div class="kpi"><h2 id="meetingsCount">0</h2><p>Meetings Counted</p></div>
-    <div class="kpi"><h2 id="totalPoints">0</h2><p>Total Points</p></div>
-    <div class="kpi"><h2 id="distinctRoles">0</h2><p>Distinct Roles</p></div>
-  </div>
+<div class="stats">
+  <div class="stat-card">Meetings Counted: <span id="meetingsCount">0</span></div>
+  <div class="stat-card">Total Points: <span id="totalPoints">0</span></div>
+  <div class="stat-card">Distinct Roles: <span id="distinctRoles">0</span></div>
+</div>
 
-  <div class="tabs">
-    <button class="tablink active" data-tab="leaderboard">Leaderboard</button>
-    <button class="tablink" data-tab="category">Category Breakdown</button>
-    <button class="tablink" data-tab="progress">Cumulative Progress</button>
-    <button class="tablink" data-tab="details">Per-Meeting Details</button>
-  </div>
+<div class="tab-buttons">
+  <button class="tab-btn active" data-tab="total">Total</button>
+  <button class="tab-btn" data-tab="early">Early Attendance</button>
+  <button class="tab-btn" data-tab="roles">Role Taking</button>
+  <button class="tab-btn" data-tab="speeches">Speeches</button>
+  <button class="tab-btn" data-tab="evals">Evaluations</button>
+  <button class="tab-btn" data-tab="leaderboard">Leaderboard</button>
+</div>
 
-  <div id="leaderboard" class="tabcontent active">
-    <table id="leaderboardTable" class="display"></table>
-  </div>
-  <div id="category" class="tabcontent">
-    <canvas id="categoryChart"></canvas>
-  </div>
-  <div id="progress" class="tabcontent">
-    <canvas id="progressChart"></canvas>
-  </div>
-  <div id="details" class="tabcontent">
-    <table id="detailTable" class="display"></table>
-  </div>
+<div id="total" class="tab-content active">
+  <h2>Total Breakdown</h2>
+  <table id="totalTable"></table>
+</div>
+
+<div id="early" class="tab-content">
+  <h2>Early Attendance</h2>
+  <table id="earlyTable"></table>
+</div>
+
+<div id="roles" class="tab-content">
+  <h2>Role Taking</h2>
+  <table id="rolesTable"></table>
+</div>
+
+<div id="speeches" class="tab-content">
+  <h2>Speeches</h2>
+  <table id="speechesTable"></table>
+</div>
+
+<div id="evals" class="tab-content">
+  <h2>Evaluations</h2>
+  <table id="evalsTable"></table>
+</div>
+
+<div id="leaderboard" class="tab-content">
+  <h2>Leaderboard</h2>
+  <table id="leaderboardTable"></table>
 </div>
 
 <script>
-const sheetLinks = {
+const sheetUrls = {
   "Summary": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=1556398249&single=true&output=csv",
   "Total": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=1939085341&single=true&output=csv",
   "Early Attendance": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=1928408168&single=true&output=csv",
   "Role Taking": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=23380471&single=true&output=csv",
-  "Last Minute Roles": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=10890228&single=true&output=csv",
   "Speeches": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=170161438&single=true&output=csv",
-  "Evaluations": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=335593996&single=true&output=csv",
-  "Level Completions": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=1646576393&single=true&output=csv",
-  "Awards": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=302763050&single=true&output=csv",
-  "ExCom & Sub.": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=710668362&single=true&output=csv",
-  "Contests": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=859627444&single=true&output=csv",
-  "Table Topics": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=618267332&single=true&output=csv"
+  "Evaluations": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=335593996&single=true&output=csv"
 };
 
-let sheetsData = {};
-let rolesList = new Set();
-let categoryChart, progressChart;
+let sheets = {};
 
-async function loadSheet(name, url) {
-  return new Promise((resolve) => {
+function loadSheets() {
+  Object.entries(sheetUrls).forEach(([name,url]) => {
     Papa.parse(url, {
-      download: true,
-      header: true,
-      complete: (results) => {
-        sheetsData[name] = results.data;
-        resolve();
+      download:true,
+      header:true,
+      skipEmptyLines:true,
+      beforeFirstChunk: function(chunk) {
+        let rows = chunk.split(/\r?\n/);
+        if(name==="Total") {
+          rows[0] = rows[1]; // use row 2 as headers
+          rows.splice(1,1);  // remove row 2
+        } else {
+          rows.splice(1,1); // remove row 2 with meeting numbers
+        }
+        return rows.join("\n");
+      },
+      complete: function(results) {
+        sheets[name] = results.data;
+        console.log("Loaded:", name, results.data);
+        if(name==="Total") populateMembers(results.data);
+        if(name==="Summary") populateLeaderboard(results.data);
+        if(name==="Total") populateTable("#totalTable", results.data);
+        if(name==="Early Attendance") populateTable("#earlyTable", results.data);
+        if(name==="Role Taking") populateTable("#rolesTable", results.data);
+        if(name==="Speeches") populateTable("#speechesTable", results.data);
+        if(name==="Evaluations") populateTable("#evalsTable", results.data);
       }
     });
   });
 }
 
-async function init() {
-  for (const [name, url] of Object.entries(sheetLinks)) {
-    await loadSheet(name, url);
-  }
-  populateMembers();
-  populateRoles();
-  renderLeaderboard();
-  attachEvents();
+function populateMembers(data) {
+  let names = [...new Set(data.map(r=>r.Name).filter(n=>n))];
+  let sel = $("#memberSelect");
+  names.forEach(n=> sel.append(`<option value="${n}">${n}</option>`));
 }
 
-function populateMembers() {
-  const total = sheetsData["Total"];
-  total.forEach(row => {
-    if (row["Name"]) {
-      $("#memberSelect").append(`<option value="${row["Name"]}">${row["Name"]}</option>`);
-    }
+function populateLeaderboard(data) {
+  populateTable("#leaderboardTable", data);
+}
+
+function populateTable(selector, data) {
+  if(!data || data.length===0) return;
+  let cols = Object.keys(data[0]);
+  let html = "<thead><tr>"+cols.map(c=>`<th>${c}</th>`).join("")+"</tr></thead><tbody>";
+  data.forEach(row=>{
+    html += "<tr>"+cols.map(c=>`<td>${row[c]||""}</td>`).join("")+"</tr>";
   });
+  html += "</tbody>";
+  $(selector).html(html).DataTable();
 }
 
-function populateRoles() {
-  ["Role Taking","Last Minute Roles"].forEach(sheetName => {
-    sheetsData[sheetName].forEach(r => {
-      Object.values(r).slice(2).forEach(val => { if(val) rolesList.add(val); });
-    });
-  });
-  sheetsData["Speeches"].forEach(r => { if(r["Name"]) rolesList.add("Speaker"); });
-  sheetsData["Evaluations"].forEach(r => { if(r["Name"]) rolesList.add("Evaluator"); });
-  rolesList.forEach(role => {
-    $("#roleSelect").append(`<option value="${role}">${role}</option>`);
-  });
-}
+$(document).on("click", ".tab-btn", function(){
+  $(".tab-btn").removeClass("active");
+  $(this).addClass("active");
+  $(".tab-content").removeClass("active");
+  $("#"+$(this).data("tab")).addClass("active");
+});
 
-function renderLeaderboard() {
-  const summary = sheetsData["Summary"];
-  const cols = Object.keys(summary[0] || {});
-  const data = summary.map(r => cols.map(c => r[c]));
-  $("#leaderboardTable").DataTable({
-    data: data,
-    columns: cols.map(c => ({title:c})),
-    destroy:true
-  });
-}
-
-function attachEvents() {
-  $(".tablink").on("click", function(){
-    $(".tablink").removeClass("active");
-    $(this).addClass("active");
-    $(".tabcontent").removeClass("active");
-    $("#" + $(this).data("tab")).addClass("active");
-  });
-  $("#memberSelect").on("change", updateMemberView);
-}
-
-function updateMemberView() {
-  const member = $("#memberSelect").val();
-  if (!member) return;
-  updateKPIs(member);
-  updateCategoryChart(member);
-  updateProgressChart(member);
-}
-
-function updateKPIs(member) {
-  const total = sheetsData["Total"];
-  const row = total.find(r => r["Name"] === member);
-  $("#totalPoints").text(row ? row["Points"] : 0);
-
-  const ea = sheetsData["Early Attendance"];
-  let count=0;
-  ea.forEach(r => {
-    if(r["Name"]===member){
-      Object.values(r).slice(2).forEach(v=>{
-        if(v && v!=="A" && v!=="E") count++;
-      });
-    }
-  });
-  $("#meetingsCount").text(count);
-
-  let memberRoles=new Set();
-  ["Role Taking","Last Minute Roles"].forEach(sheet=>{
-    sheetsData[sheet].forEach(r=>{
-      if(r["Name"]===member){
-        Object.values(r).slice(2).forEach(v=>{ if(v) memberRoles.add(v); });
-      }
-    });
-  });
-  sheetsData["Speeches"].forEach(r=>{ if(r["Name"]===member) memberRoles.add("Speaker"); });
-  sheetsData["Evaluations"].forEach(r=>{ if(r["Name"]===member) memberRoles.add("Evaluator"); });
-  $("#distinctRoles").text(memberRoles.size);
-}
-
-function updateCategoryChart(member) {
-  const total = sheetsData["Total"];
-  const row = total.find(r=>r["Name"]===member);
-  if(!row) return;
-  const labels = Object.keys(row).filter(k=>k!=="Name" && k!=="Points");
-  const values = labels.map(l=>parseInt(row[l])||0);
-  if(categoryChart) categoryChart.destroy();
-  categoryChart = new Chart(document.getElementById("categoryChart"),{
-    type:"pie",
-    data:{labels:labels, datasets:[{data:values}]}});
-}
-
-function updateProgressChart(member) {
-  const total = sheetsData["Total"];
-  const row = total.find(r=>r["Name"]===member);
-  if(!row) return;
-  const labels = Object.keys(row).filter(k=>k!=="Name" && k!=="Points");
-  const values = labels.map(l=>parseInt(row[l])||0);
-  let cum=0, cumValues=[];
-  values.forEach(v=>{ cum+=v; cumValues.push(cum); });
-  if(progressChart) progressChart.destroy();
-  progressChart = new Chart(document.getElementById("progressChart"),{
-    type:"line",
-    data:{labels:labels, datasets:[{label:"Cumulative Points", data:cumValues}]}
-  });
-}
-
-init();
+$(document).ready(loadSheets);
 </script>
 </body>
 </html>
