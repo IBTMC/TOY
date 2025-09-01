@@ -642,6 +642,32 @@ footer.visible {
   background-color: rgba(0, 32, 91, 0.9); /* Toastmasters Navy with opacity */
 }
 
+
+/* Slow down gradient animation for smoother effect */
+body {
+  background: linear-gradient(-45deg, #00205B, #772432, #00205B, #772432);
+  background-size: 400% 400%;
+  animation: gradient 30s ease infinite; /* slowed down */
+}
+
+/* Footer styling */
+footer {
+  background-color: rgba(0, 32, 91, 0.7); /* translucent navy */
+  border-top: 2px solid #772432; /* thin maroon accent line */
+  transition: background-color 1.5s ease;
+}
+footer.visible {
+  background-color: rgba(0, 32, 91, 0.85);
+}
+footer a {
+  color: #fff;
+  transition: background-color 0.5s ease, box-shadow 0.5s ease;
+}
+footer a:hover {
+  background-color: #772432; /* maroon hover */
+  box-shadow: 0 0 10px rgba(0, 32, 91, 0.6); /* soft navy glow */
+}
+
 </style>
 </head>
 <body>
@@ -918,26 +944,43 @@ function buildMemberDropdown(){
   sel.addEventListener("change", e=>{ if(e.target.value) openProfile(e.target.value); });
 }
 
+
 /* ---------- Global Role filter ---------- */
 function buildGlobalRoleFilter(){
   const allRoles = new Set();
   [roleData,lmrData].forEach(sheet=>{
     sheet.forEach(r=>{
-      Object.values(r).slice(2).forEach(v=>{ if (v && !/^\d+$/.test(v) && !/^Meeting\s*#?$/i.test(v)) allRoles.add(String(v).trim()); });
+      Object.values(r).slice(2).forEach(v=>{
+        if(v && String(v).trim()){
+          allRoles.add(String(v).trim());
+        }
+      });
     });
   });
-  allRoles.add("Speaker"); allRoles.add("Evaluator");
-  const list = [...allRoles].sort((a,b)=>a.localeCompare(b));
+  allRoles.add("Speaker"); 
+  allRoles.add("Evaluator");
+
+  // Filter roles: remove "Meeting #" and numeric-only entries
+  const list = [...allRoles].filter(r => {
+    const trimmed = r.trim();
+    return trimmed.toLowerCase() !== "meeting #" && !/^\d+$/.test(trimmed);
+  }).sort((a,b)=>a.localeCompare(b));
 
   const sel = document.getElementById("roleFilter");
   sel.innerHTML = '<option value="">All roles</option>';
-  listClean.forEach(r=>{ const o=document.createElement("option"); o.value=r; o.textContent=r; sel.appendChild(o); });
+  list.forEach(r=>{
+    const o=document.createElement("option"); 
+    o.value=r; 
+    o.textContent=r; 
+    sel.appendChild(o); 
+  });
 
   // Filter listeners (affect profile + club)
   sel.addEventListener("change", ()=>{ recomputeAndRender(); refreshClubCharts(); });
   document.getElementById("startDate").addEventListener("change", ()=>{ recomputeAndRender(); refreshClubCharts(); });
   document.getElementById("endDate").addEventListener("change", ()=>{ recomputeAndRender(); refreshClubCharts(); });
 }
+
 
 /* ---------- Profile ---------- */
 function openProfile(member){
