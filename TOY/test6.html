@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Toastmasters Club Dashboard</title>
+
+<!-- Libs -->
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+<!-- Style -->
+<style>
+  :root{
+    --tm-navy:#004165;
+    --tm-gold:#F2DF74;
+    --tm-burgundy:#772432;
+    --tm-blue:#1C6BA0;
+    --card-bg:#ffffff;
+    --page-bg:#f6f8fb;
+  }
+  *{box-sizing:border-box}
+  body{margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial; background:var(--page-bg); color:#222}
+  header{background:var(--tm-navy); color:#fff; padding:18px 20px; display:flex; align-items:center; gap:14px}
+  header img{height:40px}
+  header h1{margin:0; font-size:20px; font-weight:700}
+  .container{max-width:1200px; margin:24px auto; padding:0 16px}
+  h2{color:var(--tm-navy); margin:24px 0 12px}
+  .card{background:var(--card-bg); border-radius:12px; box-shadow:0 6px 20px rgba(0,0,0,.07); padding:16px}
+  .grid{display:grid; gap:16px}
+  .grid-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .grid-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .kpi{display:flex; flex-direction:column; align-items:center; justify-content:center; padding:14px; border:1px solid #e7ebf0; border-radius:12px}
+  .kpi h3{margin:4px 0 2px; font-size:28px; color:var(--tm-burgundy)}
+  .kpi p{margin:0; color:#555}
+  .filters{display:flex; flex-wrap:wrap; gap:12px; align-items:end}
+  .field{display:flex; flex-direction:column; gap:6px}
+  select,input[type=date]{padding:10px 12px; border:1px solid #d3dae3; border-radius:10px; background:#fff; min-width:220px}
+  table.dataTable thead th{background:var(--tm-navy); color:#fff}
+  canvas{background:#fff; border-radius:12px; padding:10px; max-width:100%; height:auto !important}
+  .profile{display:flex; align-items:center; gap:14px}
+  .avatar{height:56px; width:56px; border-radius:50%; background:linear-gradient(135deg,var(--tm-blue),var(--tm-burgundy)); color:#fff; display:grid; place-items:center; font-weight:700}
+  .muted{color:#666; font-size:13px}
+
+  /* Tabs */
+  .tabs{display:flex; gap:10px; margin-bottom:16px; flex-wrap:wrap}
+  .tab-btn{padding:8px 14px; border-radius:8px; border:1px solid var(--tm-navy); background:#fff; color:var(--tm-navy); cursor:pointer; transition:.2s}
+  .tab-btn.active,.tab-btn:hover{background:var(--tm-navy); color:#fff}
+  .tab-content{display:none}
+  .tab-content.active{display:block}
+
+  @media (max-width:900px){
+    .grid-3{grid-template-columns:1fr}
+    .grid-2{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <img alt="TM" src="https://upload.wikimedia.org/wikipedia/commons/thumb/6/6f/Toastmasters_International_2011_Logo.svg/320px-Toastmasters_International_2011_Logo.svg.png">
+  <h1>Toastmasters Club Dashboard</h1>
+</header>
+
+<div class="container">
+
+  <!-- Leaderboard -->
+  <h2>Leaderboard (Summary)</h2>
+  <div class="card">
+    <table id="leaderboard" class="display" style="width:100%"></table>
+    <p class="muted">Tip: click a member to open their profile below.</p>
+  </div>
+
+  <!-- Profile -->
+  <h2>Member Profile</h2>
+  <div class="card">
+
+    <div class="profile" style="margin-bottom:12px">
+      <div class="avatar" id="avatar">TM</div>
+      <div>
+        <div id="profileName" style="font-weight:700; font-size:18px;">Select a member from the leaderboard</div>
+        <div id="profileSub" class="muted">—</div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="kpis">KPIs</button>
+      <button class="tab-btn" data-tab="filters">Filters</button>
+      <button class="tab-btn" data-tab="charts">Charts</button>
+      <button class="tab-btn" data-tab="details">Per-Meeting Details</button>
+    </div>
+
+    <!-- KPIs -->
+    <div id="kpis" class="tab-content active">
+      <div class="grid grid-3" style="margin-top:10px">
+        <div class="kpi"><h3 id="meetingsCount">0</h3><p>Meetings Counted (Filtered)</p></div>
+        <div class="kpi"><h3 id="totalPointsAll">0</h3><p>Total Points (All)</p></div>
+        <div class="kpi"><h3 id="filteredPoints">0</h3><p>Points (Filtered, events)</p></div>
+        <div class="kpi"><h3 id="distinctRoles">0</h3><p>Distinct Roles (Filtered)</p></div>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div id="filters" class="tab-content">
+      <div class="filters" style="margin-top:14px">
+        <div class="field">
+          <label for="roleFilter">Filter by role</label>
+          <select id="roleFilter">
+            <option value="">All roles</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="startDate">Start date</label>
+          <input id="startDate" type="date">
+        </div>
+        <div class="field">
+          <label for="endDate">End date</label>
+          <input id="endDate" type="date">
+        </div>
+      </div>
+    </div>
+
+    <!-- Charts -->
+    <div id="charts" class="tab-content">
+      <div class="grid grid-2" style="margin-top:8px">
+        <canvas id="categoryChart"></canvas>
+        <canvas id="progressChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Per-meeting table -->
+    <div id="details" class="tab-content">
+      <h3 style="color:var(--tm-navy); margin-top:10px">Per-Meeting Details</h3>
+      <table id="detailTable" class="display" style="width:100%"></table>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ====== Tabs logic ====== */
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.tab).classList.add('active');
+  });
+});
+
+/* ====== CONFIG: CSV links per sheet ====== */
+const SHEETS = {
+  Summary: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=1556398249&single=true&output=csv",
+  Total: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=1939085341&single=true&output=csv",
+  EarlyAttendance: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=1928408168&single=true&output=csv",
+  RoleTaking: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=23380471&single=true&output=csv",
+  Speeches: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=170161438&single=true&output=csv",
+  Evaluations: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=335593996&single=true&output=csv"
+};
+
+/* ====== Data holders, functions, event listeners ====== */
+/* (unchanged from your working version, just reused) */
+/* ... keep your same JS logic for building leaderboard, profile, recompute, charts, etc ... */
+
+</script>
+</body>
+</html>
