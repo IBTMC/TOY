@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>INJAZ Bahrain Toastmasters Club Dashboard</title>
+
+<!-- Libraries -->
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+  :root {
+    --tm-maroon:#6A0F1A;
+    --tm-navy:#0A2342;
+    --tm-card:#ffffff;
+    --tm-text:#1f2937;
+    --tm-muted:#6b7280;
+    --tm-shadow:0 2px 8px rgba(0,0,0,.10);
+    --tm-shadow-hover:0 8px 20px rgba(0,0,0,.16);
+    --radius:14px;
+  }
+  html, body { height:100%; }
+  body {
+    margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,"Helvetica Neue",Arial,sans-serif;
+    color:var(--tm-text); display:flex; flex-direction:column; min-height:100vh; overflow-x:hidden;
+  }
+  /* Subtle dynamic full-page gradient */
+  body::before {
+    content:""; position:fixed; inset:0; z-index:-1;
+    background:linear-gradient(135deg,var(--tm-maroon),var(--tm-navy),var(--tm-maroon));
+    background-size:300% 300%; animation:tmGradient 45s ease-in-out infinite;
+    filter:saturate(.9) brightness(.95);
+  }
+  @keyframes tmGradient {
+    0% { background-position:0% 50%; }
+    50% { background-position:100% 50%; }
+    100% { background-position:0% 50%; }
+  }
+
+  /* Header */
+  header.tmhdr {
+    display:flex; align-items:center; justify-content:center; gap:12px;
+    padding:10px 16px; color:#fff; position:relative;
+  }
+  .tmhdr .logo { position:absolute; left:16px; top:50%; transform:translateY(-50%); height:40px; width:auto; }
+  .tmhdr h1 { margin:0; font-size:clamp(18px,2.2vw,24px); font-weight:700; text-align:center; letter-spacing:.2px; }
+
+  /* Tabs */
+  .tabs { display:flex; gap:8px; justify-content:center; flex-wrap:wrap; padding:10px 16px; }
+  .tab-btn {
+    background:rgba(255,255,255,.10); color:#fff; border:1px solid rgba(255,255,255,.25);
+    padding:8px 14px; border-radius:999px; cursor:pointer; font-weight:600;
+    backdrop-filter: blur(4px);
+    transition:transform .15s ease, box-shadow .15s ease, background .2s ease;
+  }
+  .tab-btn:hover { transform:translateY(-1px); box-shadow:var(--tm-shadow-hover); }
+  .tab-btn.active { background:#fff; color:var(--tm-maroon); border-color:transparent; }
+
+  /* Main content wrapper */
+  .wrap { width:min(1200px,96%); margin:10px auto 28px; display:flex; flex-direction:column; gap:16px; }
+
+  /* Cards */
+  .card {
+    background:var(--tm-card); border-radius:var(--radius); box-shadow:var(--tm-shadow); padding:16px;
+    transition:transform .15s ease, box-shadow .2s ease;
+  }
+  .card:hover { transform:translateY(-2px); box-shadow:var(--tm-shadow-hover); }
+
+  /* KPI grid */
+  .kpis { display:grid; grid-template-columns:repeat(4,minmax(140px,1fr)); gap:10px; }
+  @media (max-width:900px) { .kpis { grid-template-columns:repeat(2,minmax(140px,1fr)); } }
+  @media (max-width:520px) { .kpis { grid-template-columns:1fr 1fr; } }
+  .kpi { text-align:center; padding:10px 8px; border-radius:12px; background:#fff; }
+  .kpi .num { font-size:clamp(18px,3vw,28px); font-weight:800; color:var(--tm-maroon); }
+  .kpi .label { font-size:13px; color:var(--tm-navy); font-weight:700; }
+
+  /* Filters */
+  .filters { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .filters select, .filters input { padding:8px 10px; border-radius:10px; border:1px solid #e5e7eb; min-width:160px; }
+  .filters label { font-size:13px; color:#111827; font-weight:700; margin-right:4px; }
+
+  /* Charts */
+  .charts { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  @media (max-width:900px) { .charts { grid-template-columns:1fr; } }
+
+  /* DataTables - readable pagination & centered numbers */
+  table.dataTable th, table.dataTable td { text-align:center; }
+  .dataTables_wrapper .dataTables_paginate .paginate_button { color:var(--tm-maroon) !important; border:1px solid #e5e7eb !important; background:#fff !important; }
+  .dataTables_wrapper .dataTables_paginate .paginate_button.current { background:var(--tm-maroon) !important; color:#fff !important; }
+  .dataTables_wrapper .dataTables_paginate .paginate_button.disabled { opacity:.6 !important; }
+  .dataTables_wrapper .dataTables_filter input { border-radius:8px; border:1px solid #ddd; padding:6px 8px; }
+
+  /* Footer (sits on same gradient) */
+  footer.tmftr { color:#fff; text-align:center; padding:18px 12px; margin-top:auto; }
+  footer.tmftr a { color:#fff; text-decoration:none; border-bottom:1px dotted rgba(255,255,255,.6); }
+  footer.tmftr a:hover { color:var(--tm-maroon); }
+
+/* === Targeted fixes === */
+/* Squeeze Per-meeting Details table */
+#detailTable th, #detailTable td {
+  padding: 4px 6px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+@media (max-width: 600px) {
+  #detailTable th, #detailTable td {
+    font-size: 12px;
+    padding: 3px 4px;
+  }
+  /* Stack the Awards/Levels grid to a single column on phones */
+  #profileTwoCol { grid-template-columns: 1fr !important; }
+  /* Header logo + title no overlap */
+  .tmhdr .logo { height: 28px; left: 8px; }
+  .tmhdr h1 { font-size: 16px; margin: 0 40px; }
+}
+
+
+/* Allow Member Profile card to extend and scroll horizontally */
+#tab-profile {
+  overflow-x: auto;
+}
+#tab-profile table {
+  min-width: max-content;
+}
+
+</style>
+</head>
+<body>
+
+<header class="tmhdr">
+  <img class="logo" src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGlkPSJMYXllcl8xIiB2aWV3Qm94PSIwIDAgNjAwIDYwMCI+CiAgPGRlZnM+CiAgICA8c3R5bGU+LmNscy0xe2ZpbGw6IzAwYTBhZjt9LmNscy0ye2ZpbGw6IzI4NWY3NDt9PC9zdHlsZT4KICA8L2RlZnM+CiAgPGc+CiAgICA8Zz4KICAgICAgPHBvbHlnb24gY2xhc3M9ImNscy0yIiBwb2ludHM9IjQ3Ny41NyA1MCA0MjcuOSAxNDkuOTYgMzQ1LjEyIDE1MC4yIDQ3Ny41NyA1MCI+PC9wb2x5Z29uPgogICAgICA8cG9seWdvbiBjbGFzcz0iY2xzLTEiIHBvaW50cz0iNDc3LjY0IDUwIDQyNy45NyAxNDkuOTYgNDc3LjY2IDIxNi4wOCA0NzcuNjQgNTAiPjwvcG9seWdvbj4KICAgIDwvZz4KICAgIDxnPgogICAgICA8cG9seWdvbiBjbGFzcz0iY2xzLTIiIHBvaW50cz0iNDc3LjU3IDIxNi4wOCA0MjcuOSAzMTYuMDQgMzQ1LjEyIDMxNi4yNyA0NzcuNTcgMjE2LjA4Ij48L3BvbHlnb24+CiAgICAgIDxwb2x5Z29uIGNsYXNzPSJjbHMtMSIgcG9pbnRzPSI0NzcuNjQgMjE2LjA4IDQyNy45NyAzMTYuMDQgNDc3LjY2IDM4Mi4xNSA0NzcuNjQgMjE2LjA4Ij48L3BvbHlnb24+CiAgICA8L2c+CiAgICA8Zz4KICAgICAgPHBvbHlnb24gY2xhc3M9ImNscy0yIiBwb2ludHM9IjM0NC43NCAxNTAuMiAyOTUuMDcgMjUwLjE2IDIxMi4yOSAyNTAuNCAzNDQuNzQgMTUwLjIiPjwvcG9seWdvbj4KICAgICAgPHBvbHlnb24gY2xhc3M9ImNscy0xIiBwb2ludHM9IjM0NC44MSAxNTAuMiAyOTUuMTQgMjUwLjE2IDM0NC44MyAzMTYuMjcgMzQ0LjgxIDE1MC4yIj48L3BvbHlnb24+CiAgICA8L2c+CiAgICA8Zz4KICAgICAgPHBvbHlnb24gY2xhc3M9ImNscy0yIiBwb2ludHM9IjIxMi4yNCAyNTAuNCAxNjIuNTggMzUwLjM2IDc5LjggMzUwLjYgMjEyLjI0IDI1MC40Ij48L3BvbHlnb24+CiAgICAgIDxwb2x5Z29uIGNsYXNzPSJjbHMtMSIgcG9pbnRzPSIyMTIuMzIgMjUwLjQgMTYyLjY1IDM1MC4zNiAyMTIuMzQgNDE2LjQ3IDIxMi4zMiAyNTAuNCI+PC9wb2x5Z29uPgogICAgPC9nPgogICAgPGc+CiAgICAgIDxwb2x5Z29uIGNsYXNzPSJjbHMtMiIgcG9pbnRzPSIzNDQuNjkgMzE2LjI3IDI5NS4wMiA0MTYuMjQgMjEyLjI0IDQxNi40NyAzNDQuNjkgMzE2LjI3Ij48L3BvbHlnb24+CiAgICAgIDxwb2x5Z29uIGNsYXNzPSJjbHMtMSIgcG9pbnRzPSIzNDQuNzYgMzE2LjI3IDI5NS4wOSA0MTYuMjQgMzQ0Ljc4IDQ4Mi4zNSAzNDQuNzYgMzE2LjI3Ij48L3BvbHlnb24+CiAgICA8L2c+CiAgICA8Zz4KICAgICAgPHBvbHlnb24gY2xhc3M9ImNscy0yIiBwb2ludHM9IjQ3Ny41MiAzODIuMTUgNDI3Ljg1IDQ4Mi4xMiAzNDUuMDcgNDgyLjM1IDQ3Ny41MiAzODIuMTUiPjwvcG9seWdvbj4KICAgICAgPHBvbHlnb24gY2xhc3M9ImNscy0xIiBwb2ludHM9IjQ3Ny41OSAzODIuMTUgNDI3LjkyIDQ4Mi4xMiA0NzcuNjEgNTQ4LjIzIDQ3Ny41OSAzODIuMTUiPjwvcG9seWdvbj4KICAgIDwvZz4KICA8L2c+CiAgPGc+CiAgICA8cGF0aCBjbGFzcz0iY2xzLTIiIGQ9Im04Mi4zOSw0NTYuOGg3LjF2MzguMjJoLTcuMXYtMzguMjJaIj48L3BhdGg+CiAgICA8cGF0aCBjbGFzcz0iY2xzLTIiIGQ9Im0xMzMuNzcsNDU2Ljh2MzguMjJoLTUuODRsLTIxLjA4LTI1Ljg4djI1Ljg4aC03LjA0di0zOC4yMmg1Ljg0bDIxLjA4LDI1Ljg4di0yNS44OGg3LjA0WiI+PC9wYXRoPgogICAgPHBhdGggY2xhc3M9ImNscy0yIiBkPSJtMTQzLjI0LDQ5NC4xMmMtMi4wNi0uOTYtMy43NC0yLjMyLTUuMDUtNC4wN2w0LjA0LTQuODZjMi4xMSwyLjkxLDQuNjQsNC4zNyw3LjU5LDQuMzcsMy45NywwLDUuOTUtMi4zNSw1Ljk1LTcuMDR2LTE5Ljc3aC0xMy42di01Ljk1aDIwLjY5djI1LjMzYzAsNC40OC0xLjA5LDcuODQtMy4yOCwxMC4wNy0yLjE4LDIuMjQtNS4zOSwzLjM2LTkuNjEsMy4zNi0yLjQ0LDAtNC42OS0uNDgtNi43NC0xLjQ1WiI+PC9wYXRoPgogICAgPHBhdGggY2xhc3M9ImNscy0yIiBkPSJtMTk2Ljc4LDQ4Ni4xN2gtMTkuMTFsLTMuNzcsOC44NWgtNy4zMmwxNy4yLTM4LjIyaDYuOTlsMTcuMjUsMzguMjJoLTcuNDNsLTMuODItOC44NVptLTIuMzUtNS41N2wtNy4yMS0xNi43MS03LjE1LDE2LjcxaDE0LjM2WiI+PC9wYXRoPgogICAgPHBhdGggY2xhc3M9ImNscy0yIiBkPSJtMjQyLjU5LDQ4OS4wMXY2LjAxaC0zMi42di00Ljc1bDIyLjUtMjcuNDZoLTIyLjExdi02aDMxLjUxdjQuNzVsLTIyLjUsMjcuNDZoMjMuMjFaIj48L3BhdGg+CiAgICA8cGF0aCBjbGFzcz0iY2xzLTIiIGQ9Im0xMTQuNDksNTMzLjIxYzEuMjQsMS42MiwxLjg2LDMuNjMsMS44Niw2LjAzLDAsMy4zMS0xLjI3LDUuODctMy44Miw3LjY3cy02LjI2LDIuNy0xMS4xNCwyLjdoLTE5di0zOC4yMmgxNy45MWM0LjUxLDAsNy45OS44OCwxMC40MywyLjY1LDIuNDQsMS43NywzLjY2LDQuMiwzLjY2LDcuMjksMCwxLjg5LS40NCwzLjU3LTEuMzEsNS4wMnMtMi4wNywyLjU4LTMuNiwzLjM5YzIuMTEuNjksMy43OSwxLjg1LDUuMDIsMy40N1ptLTI1LjAxLTE2LjI1djEwLjU0aDEwLjA1YzIuNDcsMCw0LjM4LS40NSw1LjcxLTEuMzQsMS4zMy0uODksMS45OS0yLjE5LDEuOTktMy45cy0uNjctMy4wNy0xLjk5LTMuOTZjLTEuMzMtLjg5LTMuMjMtMS4zNC01LjcxLTEuMzRoLTEwLjA1Wm0xOS43MSwyMS41N2MwLTMuNjctMi43NS01LjUxLTguMjUtNS41MWgtMTEuNDd2MTEuMDNoMTEuNDdjNS41LDAsOC4yNS0xLjg0LDguMjUtNS41MloiPjwvcGF0aD4KICAgIDxwYXRoIGNsYXNzPSJjbHMtMiIgZD0ibTE0NC4yOCw1MjMuMjJjMi4yNywyLjA2LDMuNDEsNS4xNiwzLjQxLDkuMzF2MTcuMDloLTYuNDR2LTMuNTVjLS44NCwxLjI4LTIuMDMsMi4yNS0zLjU4LDIuOTItMS41NS42Ny0zLjQxLDEuMDEtNS42LDEuMDFzLTQuMS0uMzctNS43My0xLjEyYy0xLjY0LS43NC0yLjktMS43OC0zLjgtMy4xMS0uODktMS4zMy0xLjM0LTIuODMtMS4zNC00LjUsMC0yLjYyLjk3LTQuNzIsMi45Mi02LjMxLDEuOTUtMS41OCw1LjAxLTIuMzcsOS4yLTIuMzdoNy41M3YtLjQ0YzAtMi4wNC0uNjEtMy42LTEuODMtNC43cy0zLjAzLTEuNjQtNS40My0xLjY0Yy0xLjY0LDAtMy4yNS4yNi00LjgzLjc2cy0yLjkyLDEuMjItNC4wMSwyLjEzbC0yLjY4LTQuOTdjMS41My0xLjE2LDMuMzctMi4wNiw1LjUxLTIuNjgsMi4xNS0uNjIsNC40Mi0uOTMsNi44My0uOTMsNC4yOSwwLDcuNTgsMS4wMyw5Ljg2LDMuMDlabS02LjIzLDIwLjY0YzEuMzMtLjc4LDIuMjctMS45LDIuODEtMy4zNnYtMy4zOWgtNy4wNGMtMy45MywwLTUuOSwxLjI5LTUuOSwzLjg4LDAsMS4yNC40OSwyLjIyLDEuNDcsMi45NS45OC43MywyLjM1LDEuMDksNC4xLDEuMDlzMy4yMy0uMzksNC41Ni0xLjE3WiI+PC9wYXRoPgogICAgPHBhdGggY2xhc3M9ImNscy0yIiBkPSJtMTgxLjgxLDUyMy4zNWMyLjIyLDIuMTUsMy4zMyw1LjMzLDMuMzMsOS41NnYxNi43MWgtNi44M3YtMTUuODRjMC0yLjU1LS42LTQuNDctMS44LTUuNzYtMS4yLTEuMjktMi45MS0xLjk0LTUuMTMtMS45NC0yLjUxLDAtNC41Ljc1LTUuOTUsMi4yN3MtMi4xOCwzLjY5LTIuMTgsNi41MnYxNC43NGgtNi44MnYtNDAuNTFoNi44MnYxNC43NGMxLjEzLTEuMiwyLjUyLTIuMTIsNC4xOC0yLjc2LDEuNjYtLjY0LDMuNS0uOTYsNS41NC0uOTYsMy42OCwwLDYuNjIsMS4wNyw4Ljg1LDMuMjJaIj48L3BhdGg+CiAgICA8cGF0aCBjbGFzcz0iY2xzLTIiIGQ9Im0yMTAuNyw1MjAuMTN2Ni41Yy0uNTgtLjExLTEuMTEtLjE2LTEuNTgtLjE2LTIuNjYsMC00LjczLjc3LTYuMjMsMi4zMnMtMi4yNCwzLjc4LTIuMjQsNi42OXYxNC4xNGgtNi44M3YtMjkuMTZoNi41djQuMjZjMS45Ni0zLjA2LDUuNDItNC41OSwxMC4zNy00LjU5WiI+PC9wYXRoPgogICAgPHBhdGggY2xhc3M9ImNscy0yIiBkPSJtMjM3LjMyLDUyMy4yMmMyLjI3LDIuMDYsMy40MSw1LjE2LDMuNDEsOS4zMXYxNy4wOWgtNi40NHYtMy41NWMtLjg0LDEuMjgtMi4wMywyLjI1LTMuNTgsMi45Mi0xLjU1LjY3LTMuNDEsMS4wMS01LjYsMS4wMXMtNC4xLS4zNy01LjczLTEuMTItMi45LTEuNzgtMy44LTMuMTFjLS44OS0xLjMzLTEuMzQtMi44My0xLjM0LTQuNSwwLTIuNjIuOTctNC43MiwyLjkyLTYuMzEsMS45NS0xLjU4LDUuMDEtMi4zNyw5LjItMi4zN2g3LjUzdi0uNDRjMC0yLjA0LS42MS0zLjYtMS44My00LjctMS4yMi0xLjA5LTMuMDMtMS42NC01LjQzLTEuNjQtMS42NCwwLTMuMjUuMjYtNC44My43NnMtMi45MiwxLjIyLTQuMDEsMi4xM2wtMi42OC00Ljk3YzEuNTMtMS4xNiwzLjM3LTIuMDYsNS41Mi0yLjY4LDIuMTUtLjYyLDQuNDItLjkzLDYuODItLjkzLDQuMywwLDcuNTgsMS4wMyw5Ljg2LDMuMDlabS02LjIyLDIwLjY0YzEuMzMtLjc4LDIuMjctMS45LDIuODEtMy4zNnYtMy4zOWgtNy4wNGMtMy45MywwLTUuOSwxLjI5LTUuOSwzLjg4LDAsMS4yNC40OSwyLjIyLDEuNDcsMi45NS45OC43MywyLjM1LDEuMDksNC4xLDEuMDlzMy4yMy0uMzksNC41Ni0xLjE3WiI+PC9wYXRoPgogICAgPHBhdGggY2xhc3M9ImNscy0yIiBkPSJtMjQ5Ljc5LDUxNC40OGMtLjg0LS43OC0xLjI2LTEuNzYtMS4yNi0yLjkycy40Mi0yLjE0LDEuMjYtMi45MmMuODQtLjc4LDEuODctMS4xNywzLjExLTEuMTdzMi4yNy4zNywzLjExLDEuMTJjLjg0Ljc0LDEuMjYsMS42OCwxLjI2LDIuODEsMCwxLjItLjQxLDIuMjEtMS4yMywzLjAzLS44Mi44Mi0xLjg3LDEuMjMtMy4xNCwxLjIzcy0yLjI3LS4zOS0zLjExLTEuMTdabS0uMzMsNS45OGg2LjgydjI5LjE2aC02Ljgydi0yOS4xNloiPjwvcGF0aD4KICAgIDxwYXRoIGNsYXNzPSJjbHMtMiIgZD0ibTI5MC42Myw1MjMuMzVjMi4yMiwyLjE1LDMuMzMsNS4zMywzLjMzLDkuNTZ2MTYuNzFoLTYuODJ2LTE1Ljg0YzAtMi41NS0uNi00LjQ3LTEuOC01Ljc2cy0yLjkxLTEuOTQtNS4xMy0xLjk0Yy0yLjUxLDAtNC41Ljc1LTUuOTUsMi4yNy0xLjQ2LDEuNTEtMi4xOCwzLjY5LTIuMTgsNi41MnYxNC43NGgtNi44MnYtMjkuMTZoNi41djMuNzdjMS4xMy0xLjM1LDIuNTUtMi4zNyw0LjI2LTMuMDYsMS43MS0uNjksMy42NC0xLjA0LDUuNzktMS4wNCwzLjY4LDAsNi42MiwxLjA3LDguODUsMy4yMloiPjwvcGF0aD4KICA8L2c+CiAgPGc+CiAgICA8cGF0aCBjbGFzcz0iY2xzLTIiIGQ9Im01MjAuMDQsNTM2bC0xMC4xOC4wMiw4LjQ5LDUuMDV2LjkybC04LjQzLDUuMDVoMTAuMTJ2MS45MmgtMTMuOTh2LTEuNjRsOS44My01LjgzLTkuODMtNS43NXYtMS42NGwxMy45OC0uMDJ2MS45MloiPjwvcGF0aD4KICAgIDxwYXRoIGNsYXNzPSJjbHMtMiIgZD0ibTUxNS4zOSw1MjAuNjV2OC41OWMuOTMtLjEyLDEuNjgtLjUzLDIuMjUtMS4yMy41Ny0uNy44NS0xLjU3Ljg1LTIuNjEsMC0xLjI2LS40My0yLjI4LTEuMjgtMy4wNmwxLjI0LTEuMDZjLjU2LjQ4Ljk4LDEuMDcsMS4yOCwxLjc5LjI5LjcxLjQ0LDEuNTEuNDQsMi4zOSwwLDEuMTItLjIzLDIuMTEtLjY5LDIuOThzLTEuMSwxLjUzLTEuOTMsMi4wMWMtLjgyLjQ3LTEuNzYuNzEtMi44Ljcxcy0xLjk1LS4yMy0yLjc4LS42OWMtLjgyLS40Ni0xLjQ3LTEuMDktMS45My0xLjktLjQ2LS44LS42OS0xLjcxLS42OS0yLjczcy4yMy0xLjkxLjY5LTIuNywxLjEtMS40MSwxLjkzLTEuODZjLjgzLS40NSwxLjc3LS42NywyLjg0LS42Ny4xNSwwLC4zNC4wMS41OC4wNFptLTMuNTcsNy41Yy41Ni42MiwxLjI5Ljk4LDIuMiwxLjA5di02Ljc5Yy0uODkuMTEtMS42Mi40Ny0yLjE5LDEuMDktLjU3LjYyLS44NSwxLjM5LS44NSwyLjMxcy4yOCwxLjY5Ljg0LDIuMzFaIj48L3BhdGg+CiAgICA8cGF0aCBjbGFzcz0iY2xzLTIiIGQ9Im01MTAuNTEsNTAxLjU1Yy43Ny0uNzgsMS45Mi0xLjE3LDMuNDQtMS4xN2g2LjA5djEuOTJoLTUuODdjLTEuMDIsMC0xLjguMjQtMi4zMi43MS0uNTIuNDctLjc4LDEuMTUtLjc4LDIuMDMsMCwuOTcuMywxLjc1LjkxLDIuMzIuNjEuNTcsMS40OC44NiwyLjYxLjg2aDUuNDV2MS45MmgtNS44N2MtMS4wMiwwLTEuOC4yNC0yLjMyLjcxLS41Mi40Ny0uNzgsMS4xNS0uNzgsMi4wMywwLC45Ny4zLDEuNzUuOTEsMi4zMi42MS41NywxLjQ4Ljg2LDIuNjEuODZoNS40NXYxLjkyaC0xMC41OHYtMS44NGgxLjU4Yy0uNTUtLjM5LS45Ni0uODktMS4yNS0xLjUyLS4yOS0uNjMtLjQzLTEuMzQtLjQzLTIuMTRzLjE3LTEuNTYuNS0yLjJjLjMzLS42NC44Mi0xLjEzLDEuNDYtMS40OC0uNjEtLjQtMS4wOS0uOTYtMS40NC0xLjY3LS4zNS0uNzEtLjUyLTEuNTEtLjUyLTIuNDEsMC0xLjMzLjM5LTIuMzksMS4xNi0zLjE2WiI+PC9wYXRoPgogICAgPHBhdGggY2xhc3M9ImNscy0yIiBkPSJtNTEwLjA0LDQ4OC40OGMuNDUtLjgxLDEuMDgtMS40NSwxLjktMS45MS44MS0uNDYsMS43NS0uNjksMi44Mi0uNjlzMi4wMS4yMywyLjgzLjY5Yy44Mi40NiwxLjQ1LDEuMDksMS45MSwxLjkxLjQ1LjgxLjY4LDEuNzMuNjgsMi43NiwwLC43OS0uMTUsMS41LS40NiwyLjE2LS4zMS42NS0uNzUsMS4xOS0xLjM0LDEuNjJoMS42OHYxLjg0aC0xNC44MnYtMS45Mmg1LjgzYy0uNTYtLjQzLS45OC0uOTYtMS4yNy0xLjYtLjI5LS42NC0uNDMtMS4zNC0uNDMtMi4xLDAtMS4wMy4yMy0xLjk0LjY4LTIuNzZabTcuOTgsMS4wOWMtLjMxLS41NC0uNzUtLjk3LTEuMzItMS4yOC0uNTctLjMxLTEuMjEtLjQ3LTEuOTUtLjQ3cy0xLjM4LjE2LTEuOTUuNDdjLS41Ny4zMS0xLC43NC0xLjMxLDEuMjgtLjMxLjU0LS40NiwxLjE1LS40NiwxLjgzcy4xNSwxLjI3LjQ2LDEuODJjLjMxLjU1Ljc0Ljk3LDEuMzEsMS4yOHMxLjIxLjQ2LDEuOTUuNDYsMS4zOC0uMTUsMS45NS0uNDYsMS4wMS0uNzMsMS4zMi0xLjI4Yy4zMS0uNTQuNDctMS4xNS40Ny0xLjgycy0uMTYtMS4yOS0uNDctMS44M1oiPjwvcGF0aD4KICAgIDxwYXRoIGNsYXNzPSJjbHMtMiIgZD0ibTUxNS4zOSw0NzMuN3Y4LjU5Yy45My0uMTIsMS42OC0uNTMsMi4yNS0xLjIzLjU3LS43Ljg1LTEuNTcuODUtMi42MSwwLTEuMjYtLjQzLTIuMjgtMS4yOC0zLjA2bDEuMjQtMS4wNmMuNTYuNDguOTgsMS4wNywxLjI4LDEuNzkuMjkuNzEuNDQsMS41MS40NCwyLjM5LDAsMS4xMi0uMjMsMi4xMS0uNjksMi45OHMtMS4xLDEuNTMtMS45MywyLjAxYy0uODIuNDctMS43Ni43MS0yLjguNzFzLTEuOTUtLjIzLTIuNzgtLjY5Yy0uODItLjQ2LTEuNDctMS4wOS0xLjkzLTEuOS0uNDYtLjgtLjY5LTEuNzEtLjY5LTIuNzNzLjIzLTEuOTEuNjktMi43LDEuMS0xLjQxLDEuOTMtMS44NmMuODMtLjQ1LDEuNzctLjY3LDIuODQtLjY3LjE1LDAsLjM0LjAxLjU4LjA0Wm0tMy41Nyw3LjVjLjU2LjYyLDEuMjkuOTgsMi4yLDEuMDl2LTYuNzljLS44OS4xMS0xLjYyLjQ3LTIuMTksMS4wOS0uNTcuNjItLjg1LDEuMzktLjg1LDIuMzFzLjI4LDEuNjkuODQsMi4zMVoiPjwvcGF0aD4KICAgIDxwYXRoIGNsYXNzPSJjbHMtMiIgZD0ibTUwOS44NCw0NjcuNjljLS4zMi0uNjUtLjQ4LTEuNDUtLjQ4LTIuMzhoMS44NmMtLjAxLjExLS4wMi4yNS0uMDIuNDQsMCwxLjA0LjMxLDEuODUuOTMsMi40NS42Mi41OSwxLjUuODksMi42NS44OWg1LjI3djEuOTJoLTEwLjU4di0xLjg0aDEuNzhjLS42MS0uMzMtMS4wOC0uODMtMS40LTEuNDhaIj48L3BhdGg+CiAgICA8cGF0aCBjbGFzcz0iY2xzLTIiIGQ9Im01MTkuNDYsNDU1Ljc0Yy0uNDcuODQtMS4xMSwxLjUtMS45MywxLjk3LS44Mi40Ny0xLjc1LjcxLTIuNzkuNzFzLTEuOTctLjI0LTIuNzktLjcxYy0uODItLjQ3LTEuNDYtMS4xMy0xLjkyLTEuOTdzLS42OS0xLjc4LS42OS0yLjg0LjIzLTEuOTkuNjktMi44MmMuNDYtLjgzLDEuMS0xLjQ5LDEuOTItMS45NnMxLjc1LS43MSwyLjc5LS43MSwxLjk3LjI0LDIuNzkuNzEsMS40NiwxLjEzLDEuOTMsMS45NmMuNDcuODMuNywxLjc3LjcsMi44MnMtLjIzLDItLjcsMi44NFptLTEuNDUtNC42NmMtLjMxLS41NC0uNzUtLjk2LTEuMzItMS4yN3MtMS4yMS0uNDYtMS45NS0uNDYtMS4zOC4xNS0xLjk1LjQ2LTEsLjczLTEuMzEsMS4yN2MtLjMxLjU0LS40NiwxLjE1LS40NiwxLjgzcy4xNSwxLjI5LjQ2LDEuODNjLjMxLjU0Ljc0Ljk2LDEuMzEsMS4yOC41Ny4zMSwxLjIxLjQ3LDEuOTUuNDdzMS4zOC0uMTYsMS45NS0uNDdjLjU3LS4zMSwxLjAxLS43NCwxLjMyLTEuMjguMzEtLjU0LjQ3LTEuMTUuNDctMS44M3MtLjE2LTEuMjktLjQ3LTEuODNaIj48L3BhdGg+CiAgICA8cGF0aCBjbGFzcz0iY2xzLTIiIGQ9Im01MDguNTQsNDQyLjZoLjkydi0zLjA3aDEuNTh2My4wM2g5LjAxdjEuOTJoLTkuMDF2MS44aC0xLjU4di0xLjhoLS45NGMtMS4wNSwwLTEuODgtLjMxLTIuNS0uOTJzLS45Mi0xLjQ3LS45Mi0yLjU4YzAtLjQzLjA1LS44Mi4xNi0xLjJzLjI2LS42OS40Ni0uOTZsMS40Ni41OGMtLjMzLjQ0LS41LjkzLS41LDEuNDgsMCwxLjE0LjYyLDEuNzIsMS44NiwxLjcyWiI+PC9wYXRoPgogICAgPHBhdGggY2xhc3M9ImNscy0yIiBkPSJtNTE5LjY3LDQzMi42Yy0uMzUuNzItLjg1LDEuMy0xLjQ5LDEuNzRsLTEuMzYtMS4xNmMxLjEtLjc3LDEuNjYtMS43NCwxLjY2LTIuOTIsMC0uNzgtLjI0LTEuMzgtLjcyLTEuNzktLjQ4LS40MS0xLjE4LS42MS0yLjEyLS42MWgtNy44NXY1LjA1aC0xLjc0di03LjAzaDkuNDljMS41NCwwLDIuNzEuMzcsMy40OSwxLjExLjc4Ljc0LDEuMTcsMS44MywxLjE3LDMuMjYsMCwuODQtLjE4LDEuNjItLjUzLDIuMzRaIj48L3BhdGg+CiAgICA8cGF0aCBjbGFzcz0iY2xzLTIiIGQ9Im01MTYuNTUsNDEzLjIxdjcuNDNsMy40OSwxLjU0djIuMDZsLTEzLjk4LTYuMzN2LTEuOThsMTMuOTgtNi4zNXYyLjFsLTMuNDksMS41NFptLTEuNi43bC02Ljg1LDMuMDIsNi44NSwzLjAydi02LjAzWiI+PC9wYXRoPgogICAgPHBhdGggY2xhc3M9ImNscy0yIiBkPSJtNTA2LjA2LDM4Mi4zN2wxMy45OCw0LjY3djIuMWwtMTEuMTYsMy44MSwxMS4xNiwzLjgxdjIuMTRsLTEzLjk4LDQuNjd2LTIuMDZsMTEuMzYtMy43Ny0xMS4zNi0zLjk0di0xLjg0bDExLjQyLTMuODUtMTEuNDItMy44NXYtMS45WiI+PC9wYXRoPgogICAgPHBhdGggY2xhc3M9ImNscy0yIiBkPSJtNTE5LjQ2LDM3OS4zMmMtLjQ3Ljg0LTEuMTEsMS41LTEuOTMsMS45N3MtMS43NS43MS0yLjc5LjcxLTEuOTctLjI0LTIuNzktLjcxLTEuNDYtMS4xMy0xLjkyLTEuOTctLjY5LTEuNzgtLjY5LTIuODQuMjMtMS45OS42OS0yLjgzYy40Ni0uODMsMS4xLTEuNDgsMS45Mi0xLjk2czEuNzUtLjcxLDIuNzktLjcxLDEuOTcuMjQsMi43OS43MSwxLjQ2LDEuMTMsMS45MywxLjk2Yy40Ny44My43LDEuNzcuNywyLjgzcy0uMjMsMi0uNywyLjg0Wm0tMS40NS00LjY2Yy0uMzEtLjU0LS43NS0uOTYtMS4zMi0xLjI3cy0xLjIxLS40Ni0xLjk1LS40Ni0xLjM4LjE1LTEuOTUuNDYtMSwuNzMtMS4zMSwxLjI3Yy0uMzEuNTQtLjQ2LDEuMTUtLjQ2LDEuODNzLjE1LDEuMjkuNDYsMS44M2MuMzEuNTQuNzQuOTcsMS4zMSwxLjI4LjU3LjMxLDEuMjEuNDcsMS45NS40N3MxLjM4LS4xNiwxLjk1LS40N2MuNTctLjMxLDEuMDEtLjc0LDEuMzItMS4yOC4zMS0uNTQuNDctMS4xNS40Ny0xLjgzcy0uMTYtMS4yOS0uNDctMS44M1oiPjwvcGF0aD4KICAgIDxwYXRoIGNsYXNzPSJjbHMtMiIgZD0ibTUwOS44NCwzNjUuMDJjLS4zMi0uNjUtLjQ4LTEuNDQtLjQ4LTIuMzhoMS44NmMtLjAxLjExLS4wMi4yNS0uMDIuNDQsMCwxLjA0LjMxLDEuODUuOTMsMi40NS42Mi41OSwxLjUuODksMi42NS44OWg1LjI3djEuOTJoLTEwLjU4di0xLjg0aDEuNzhjLS42MS0uMzMtMS4wOC0uODItMS40LTEuNDhaIj48L3BhdGg+CiAgICA8cGF0aCBjbGFzcz0iY2xzLTIiIGQ9Im01MDUuMjIsMzYwLjI5di0xLjkyaDE0LjgydjEuOTJoLTE0LjgyWiI+PC9wYXRoPgogICAgPHBhdGggY2xhc3M9ImNscy0yIiBkPSJtNTA1LjIyLDM0NC43M2gxNC44MnYxLjg0aC0xLjY4Yy41OS40MywxLjAzLjk3LDEuMzQsMS42Mi4zMS42NS40NiwxLjM3LjQ2LDIuMTYsMCwxLjAzLS4yMywxLjk0LS42OCwyLjc2LS40NS44MS0xLjA5LDEuNDUtMS45MSwxLjkxLS44Mi40Ni0xLjc2LjY5LTIuODMuNjlzLTItLjIzLTIuODItLjY5Yy0uODEtLjQ2LTEuNDQtMS4wOS0xLjktMS45MS0uNDUtLjgxLS42OC0xLjczLS42OC0yLjc2LDAtLjc2LjE0LTEuNDYuNDMtMi4xLjI5LS42NC43MS0xLjE3LDEuMjctMS42aC01Ljgzdi0xLjkyWm0xMi43OSwzLjYzYy0uMzEtLjU1LS43NS0uOTctMS4zMi0xLjI4cy0xLjIxLS40Ni0xLjk1LS40Ni0xLjM4LjE1LTEuOTUuNDYtMSwuNzMtMS4zMSwxLjI4Yy0uMzEuNTUtLjQ2LDEuMTUtLjQ2LDEuODJzLjE1LDEuMjkuNDYsMS44M2MuMzEuNTQuNzQuOTcsMS4zMSwxLjI4LjU3LjMxLDEuMjEuNDcsMS45NS40N3MxLjM4LS4xNiwxLjk1LS40N2MuNTctLjMxLDEuMDEtLjc0LDEuMzItMS4yOC4zMS0uNTQuNDctMS4xNS40Ny0xLjgzcy0uMTYtMS4yNy0uNDctMS44MloiPjwvcGF0aD4KICAgIDxwYXRoIGNsYXNzPSJjbHMtMiIgZD0ibTUwOS40NiwzMjUuMDhsMTAuNTgsMy45NXYxLjg0bC04LjAzLDMuMDYsOC4wMywzLjA5djEuODRsLTEwLjU4LDMuOTR2LTEuODJsOC40My0zLjA4LTguNDMtMy4ydi0xLjYybDguNDctMy4xNC04LjQ3LTMuMTZ2LTEuNzJaIj48L3BhdGg+CiAgICA8cGF0aCBjbGFzcz0iY2xzLTIiIGQ9Im01MDcuMDYsMzIzLjExYy0uMjQuMjUtLjUzLjM3LS44OC4zN3MtLjY0LS4xMi0uODktLjM3Yy0uMjUtLjI1LS4zNy0uNTYtLjM3LS45M3MuMTItLjY4LjM1LS45My41Mi0uMzcuODctLjM3LjY2LjEyLjkxLjM3Yy4yNS4yNS4zNy41Ni4zNy45M3MtLjEyLjY4LS4zNi45M1ptMi40LjAzdi0xLjkyaDEwLjU4djEuOTJoLTEwLjU4WiI+PC9wYXRoPgogICAgPHBhdGggY2xhc3M9ImNscy0yIiBkPSJtNTA1LjIyLDMwNy41OWgxNC44MnYxLjg0aC0xLjY4Yy41OS40MywxLjAzLjk3LDEuMzQsMS42Mi4zMS42NS40NiwxLjM3LjQ2LDIuMTYsMCwxLjAzLS4yMywxLjk0LS42OCwyLjc2LS40NS44MS0xLjA5LDEuNDUtMS45MSwxLjkxLS44Mi40Ni0xLjc2LjY5LTIuODMuNjlzLTItLjIzLTIuODItLjY5Yy0uODEtLjQ2LTEuNDQtMS4wOS0xLjktMS45MS0uNDUtLjgxLS42OC0xLjczLS42OC0yLjc2LDAtLjc2LjE0LTEuNDYuNDMtMi4xLjI5LS42NC43MS0xLjE3LDEuMjctMS42aC01Ljgzdi0xLjkyWm0xMi43OSwzLjYzYy0uMzEtLjU1LS43NS0uOTctMS4zMi0xLjI4cy0xLjIxLS40Ni0xLjk1LS40Ni0xLjM4LjE1LTEuOTUuNDYtMSwuNzMtMS4zMSwxLjI4Yy0uMzEuNTUtLjQ2LDEuMTUtLjQ2LDEuODJzLjE1LDEuMjkuNDYsMS44M2MuMzEuNTQuNzQuOTcsMS4zMSwxLjI4LjU3LjMxLDEuMjEuNDcsMS45NS40N3MxLjM4LS4xNiwxLjk1LS40N2MuNTctLjMxLDEuMDEtLjc0LDEuMzItMS4yOC4zMS0uNTQuNDctMS4xNS40Ny0xLjgzcy0uMTYtMS4yNy0uNDctMS44MloiPjwvcGF0aD4KICAgIDxwYXRoIGNsYXNzPSJjbHMtMiIgZD0ibTUxNS4zOSwyOTQuNDN2OC41OWMuOTMtLjEyLDEuNjgtLjUzLDIuMjUtMS4yMy41Ny0uNy44NS0xLjU3Ljg1LTIuNjEsMC0xLjI3LS40My0yLjI4LTEuMjgtMy4wNmwxLjI0LTEuMDZjLjU2LjQ4Ljk4LDEuMDgsMS4yOCwxLjc5LjI5LjcxLjQ0LDEuNTEuNDQsMi4zOSwwLDEuMTItLjIzLDIuMTEtLjY5LDIuOThzLTEuMSwxLjUzLTEuOTMsMi4wMWMtLjgyLjQ3LTEuNzYuNzEtMi44Ljcxcy0xLjk1LS4yMy0yLjc4LS42OWMtLjgyLS40Ni0xLjQ3LTEuMDktMS45My0xLjlzLS42OS0xLjcxLS42OS0yLjczLjIzLTEuOTEuNjktMi43LDEuMS0xLjQxLDEuOTMtMS44NmMuODMtLjQ1LDEuNzctLjY3LDIuODQtLjY3LjE1LDAsLjM0LjAxLjU4LjA0Wm0tMy41Nyw3LjVjLjU2LjYyLDEuMjkuOTgsMi4yLDEuMDl2LTYuNzljLS44OS4xMS0xLjYyLjQ3LTIuMTksMS4wOS0uNTcuNjItLjg1LDEuMzktLjg1LDIuMzFzLjI4LDEuNjkuODQsMi4zMVoiPjwvcGF0aD4KICA8L2c+Cjwvc3ZnPgo=" alt="INJAZ Bahrain Toastmasters Club Logo" />
+  <h1>INJAZ Bahrain Toastmasters Club Dashboard</h1>
+</header>
+
+<div class="tabs">
+  <button class="tab-btn active" data-tab="tab-leaderboard">Leaderboard</button>
+  <button class="tab-btn" data-tab="tab-profile">Member Profile</button>
+  <button class="tab-btn" data-tab="tab-club">Club Stats</button>
+</div>
+
+<main class="wrap">
+  <!-- KPIs -->
+  <section class="card">
+    <div class="kpis">
+      <div class="kpi"><div class="num" id="meetingsCount">0</div><div class="label">Meetings (Filtered)</div></div>
+      <div class="kpi"><div class="num" id="totalPointsAll">0</div><div class="label">Total Points (Official)</div></div>
+      <div class="kpi"><div class="num" id="filteredPoints">0</div><div class="label">Points (Filtered, Weighted)</div></div>
+      <div class="kpi"><div class="num" id="distinctRoles">0</div><div class="label">Distinct Roles (Filtered)</div></div>
+    </div>
+  </section>
+
+  <!-- Filters -->
+  <section class="card">
+    <div class="filters">
+      <div><label for="memberSelect">Member:</label><select id="memberSelect"><option value="">Select a member…</option></select></div>
+      <div><label for="roleFilter">Role:</label><select id="roleFilter"><option value="">All roles</option></select></div>
+      <div><label for="startDate">From:</label><input type="date" id="startDate"></div>
+      <div><label for="endDate">To:</label><input type="date" id="endDate"></div>
+    </div>
+  </section>
+
+  <!-- Tabs content -->
+  <section id="tab-leaderboard" class="card tab-content active">
+    <h2 style="margin-top:4px;margin-bottom:10px;">Leaderboard</h2>
+    <table id="leaderboard" class="display" style="width:100%"></table>
+  </section>
+
+  <section id="tab-profile" class="card tab-content" style="display:none;">
+    <h2 style="margin-top:4px;margin-bottom:10px;">Member Profile</h2>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+      <div id="avatar" style="width:44px;height:44px;border-radius:50%;background:var(--tm-navy);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;"></div>
+      <div>
+        <div id="profileName" style="font-weight:800;"></div>
+        <div id="profileSub" style="color:var(--tm-muted);font-size:13px;"></div>
+      </div>
+    </div>
+
+    <div class="charts">
+      <canvas id="categoryChart" height="200"></canvas>
+      <canvas id="progressChart" height="200"></canvas>
+    </div>
+
+    <h3 style="margin:16px 0 8px;">Per-Meeting Details</h3>
+    <table id="detailTable" class="display" style="width:100%"></table>
+
+    <div id="profileTwoCol" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px;">
+      <div>
+        <h3 style="margin:0 0 8px;">Awards</h3>
+        <table id="awardsTable" class="display" style="width:100%"></table>
+      </div>
+    <div>
+        <h3 style="margin:0 0 8px;">Level Completions</h3>
+        <table id="levelsTable" class="display" style="width:100%"></table>
+      </div>
+      
+      </div>
+  </section>
+
+  <section id="tab-club" class="card tab-content" style="display:none;">
+    <h2 style="margin-top:4px;margin-bottom:10px;">Club Stats</h2>
+    <div class="charts">
+      <canvas id="clubProgressChart" height="220"></canvas>
+      <canvas id="clubRoleChart" height="220"></canvas>
+    </div>
+    <div id="clubTotalsNote" style="margin-top:10px;color:var(--tm-muted);font-size:13px;"></div>
+  </section>
+</main>
+
+<footer class="tmftr">
+  © INJAZ Bahrain Toastmasters Club
+</footer>
+
+<script>
+/* ---------- CSV Endpoints ---------- */
+const SHEETS = {
+  Summary: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=1556398249&single=true&output=csv",
+  Total: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=1939085341&single=true&output=csv",
+  EarlyAttendance: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=1928408168&single=true&output=csv",
+  RoleTaking: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=23380471&single=true&output=csv",
+  LastMinuteRoles: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=10890228&single=true&output=csv",
+  Speeches: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=170161438&single=true&output=csv",
+  Evaluations: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=335593996&single=true&output=csv",
+  LevelCompletions: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=1646576393&single=true&output=csv",
+  Awards: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=302763050&single=true&output=csv",
+  ExComSub: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=710668362&single=true&output=csv",
+  Contests: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=859627444&single=true&output=csv",
+  TableTopics: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=618267332&single=true&output=csv"
+};
+
+/* ---------- Point Rules ---------- */
+const POINT_RULES = {
+  earlyAttendance: v => (v === "EA0" ? 1 : 0),
+  roles: {"MC":3,"GE":2,"TTM":2,"Timer":1,"Ah Counter":1,"Grammarian":1,"Listener":1,"Evaluator":2,"Evaluators' Evaluator":1},
+  speech: 3,
+  evaluationTrue: 2,
+  awards: {"Best Speaker":2,"Best Evaluator":1,"Best TT":1,"Best Table Topics":1,"Best Role Taker":2},
+  levels: {"Level 1":5,"Level 2":6,"Level 3":7,"Level 4":8,"Level 5":9,"DTM":15},
+  excom: {
+    "Club Officer":12,"Area Director":17,"Division Director":22,
+    "Club Growth Director":27,"Program Quality Director":32,"District Director":37,
+    "Member of DD/PQD/CGD/PRM Teams":6,"Subcommittee member":6
+  },
+  contestBase: {"Table Topics":1,"Evaluation":1,"Humorous":2,"International":3,"Contest Chair":4,"Contest Role Taker":2},
+  placement: {"1st":4,"2nd":3,"3rd":2},
+  external: {
+    "Event Chair (Physical)":10,"Event Chair (Online)":8,
+    "Head of Education (Physical)":9,"Head of Education (Online)":7,
+    "Head of PR (Physical)":8,"Head of PR (Online)":6,
+    "Head of Logistics (Physical)":8,"Head of Logistics (Online)":5,
+    "Head of IT (Physical)":6,"Head of IT (Online)":5,
+    "Facilitator (Physical)":7,"Facilitator (Online)":5,
+    "DTAC Head of Committee":13,"DTAC Committee Member":6,"DTAC Role Taker":4,
+    "External Lead (ExCom Approved)":3,"Newsletter Editor":4,"YLP Volunteer":5,
+    "Outside Speech":2,"Dual Member (per club)":3
+  }
+};
+
+/* ---------- Data holders ---------- */
+let summaryData=[], totalData=[], eaData=[], roleData=[], lmrData=[], spData=[], evData=[], lvlData=[], awdData=[], excomData=[], contestData=[], ttData=[];
+let dtLeaderboard=null, dtDetails=null, dtLevels=null, dtAwards=null;
+let chartCategory=null, chartProgress=null, chartClubRole=null, chartClubProgress=null;
+let currentMember="";
+
+/* ---------- Helpers ---------- */
+const fetchCSV = (url)=>new Promise(res=>{ Papa.parse(url,{download:true,header:true,skipEmptyLines:true,complete:r=>res(r.data)}); });
+const initials = name => (name||"").split(/\s+/).map(s=>s[0]).join("").slice(0,2).toUpperCase();
+const val = (row,key)=>row?row[key]:undefined;
+const dateKeysOf = row => Object.keys(row||{}).slice(2);
+
+function safeDate(dStr){
+  if(!dStr) return null;
+  const n = new Date(dStr); if(!isNaN(n)) return n;
+  const m = dStr.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{2})$/);
+  if(m){
+    const mons={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+    return new Date(2000+(+m[3]), mons[m[2].toLowerCase()], +m[1]);
+  }
+  return null;
+}
+/* Clean list: remove "Meeting #" labels & numeric-only entries */
+function listClean(list){
+  const bad = /^(meeting\s*#?\s*\d*|\d+(?:\.\d+)?)$/i;
+  return [...new Set((list||[]).map(x=>String(x||"").trim()).filter(Boolean).filter(v=>!bad.test(v)))]
+    .sort((a,b)=>a.localeCompare(b));
+}
+
+function scoreRoleName(r){
+  if(!r) return 0;
+  const exact = POINT_RULES.roles[r]; if(exact!=null) return exact;
+  const t=r.toLowerCase();
+  if(t.includes("mc")) return 3;
+  if(t.includes("general evaluator")||t==="ge") return 2;
+  if(t.includes("ttm")||t.includes("table topics master")) return 2;
+  if(t.includes("timer")) return 1;
+  if(t.includes("ah")) return 1;
+  if(t.includes("grammar")) return 1;
+  if(t.includes("listener")) return 1;
+  if(t.includes("evaluator")) return 2;
+  return 0;
+}
+function scoreAwardText(txt){
+  if(!txt) return 0; const t=txt.toLowerCase();
+  if(t.includes("best speaker")) return POINT_RULES.awards["Best Speaker"];
+  if(t.includes("best evaluator")) return POINT_RULES.awards["Best Evaluator"];
+  if(t.includes("best tt")||t.includes("best table topics")) return POINT_RULES.awards["Best Table Topics"];
+  if(t.includes("best role taker")) return POINT_RULES.awards["Best Role Taker"];
+  return 0;
+}
+function scoreLevelText(txt){
+  if(!txt) return 0; const t=txt.trim();
+  if(POINT_RULES.levels[t]!=null) return POINT_RULES.levels[t];
+  const m=t.match(/level\s*([1-5])/i); if(m) return POINT_RULES.levels[`Level ${m[1]}`]||0;
+  if(/dtm/i.test(t)) return POINT_RULES.levels["DTM"]; return 0;
+}
+function contestModifiers(base, cell){
+  let pts=base; const x=(cell||"").toLowerCase();
+  if(x.includes("area")) pts+=1;
+  if(x.includes("division")) pts+=2;
+  if(x.includes("district")) pts+=3;
+  if(x.includes("dtac podium")) pts+=1;
+  if(x.includes("arabic")) pts*=0.5;
+  return pts;
+}
+function scoreContestTextUniq(txt){
+  if(!txt) return 0;
+  const t=txt.toLowerCase();
+  let pts=0;
+  if(t.includes("1st")) pts=Math.max(pts, contestModifiers(POINT_RULES.placement["1st"], txt));
+  if(t.includes("2nd")) pts=Math.max(pts, contestModifiers(POINT_RULES.placement["2nd"], txt));
+  if(t.includes("3rd")) pts=Math.max(pts, contestModifiers(POINT_RULES.placement["3rd"], txt));
+  if(t.includes("chair")) pts=Math.max(pts, contestModifiers(POINT_RULES.contestBase["Contest Chair"], txt));
+  if(t.includes("role")&&t.includes("taker")) pts=Math.max(pts, contestModifiers(POINT_RULES.contestBase["Contest Role Taker"], txt));
+  ["International","Humorous","Evaluation","Table Topics"].forEach(sec=>{ if(t.includes(sec.toLowerCase())) pts += contestModifiers(POINT_RULES.contestBase[sec], txt); });
+  return pts;
+}
+function scoreExternalText(txt){
+  if(!txt) return 0; const t=txt.toLowerCase();
+  for(const [k,v] of Object.entries(POINT_RULES.external)){
+    if(t.includes(k.toLowerCase())) return v;
+  }
+  if(t.includes("outside speech")) return POINT_RULES.external["Outside Speech"];
+  if(t.includes("ylp")) return POINT_RULES.external["YLP Volunteer"];
+  if(t.includes("newsletter")) return POINT_RULES.external["Newsletter Editor"];
+  if(t.includes("dual member")) return POINT_RULES.external["Dual Member (per club)"];
+  return 0;
+}
+function attendanceLabel(code){
+  if(code==="EA0") return "Early";
+  if(code==="P") return "Present";
+  if(code==="A") return "Absent";
+  if(code==="E") return "Excused";
+  return code || "";
+}
+
+/* ---------- Init ---------- */
+(async function init(){
+  try{
+    [summaryData,totalData,eaData,roleData,lmrData,spData,evData,lvlData,awdData,excomData,contestData,ttData] =
+      await Promise.all(Object.values(SHEETS).map(fetchCSV));
+
+    buildLeaderboard();
+    buildMemberDropdown();
+    buildGlobalRoleFilter();
+    refreshClubCharts();
+  }catch(err){
+    console.error("Init error:", err);
+    // No alert() to keep UX clean
+  }
+})();
+
+/* ---------- Leaderboard ---------- */
+function buildLeaderboard(){
+  if(dtLeaderboard) dtLeaderboard.destroy();
+  dtLeaderboard = $("#leaderboard").DataTable({
+    data: summaryData.filter(r=>r.Name && r.Points),
+    columns: [
+      {title:"Name", data:"Name"},
+      {title:"Points", data:"Points", render:d=>parseInt(d||0)}
+    ],
+    order:[[1,"desc"]],
+    pageLength:25,
+    columnDefs:[
+      {targets:[1], className:'dt-center'}
+    ]
+  });
+
+  // Clicking a row opens profile tab + sets member
+  $('#leaderboard tbody').off('click').on('click','tr',function(){
+    const row = dtLeaderboard.row(this).data();
+    if(row?.Name){
+      document.getElementById("memberSelect").value = row.Name;
+      openProfile(row.Name);
+      // switch tab
+      document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(t=>t.style.display='none');
+      document.querySelector('.tab-btn[data-tab="tab-profile"]').classList.add('active');
+      document.getElementById('tab-profile').style.display='block';
+    }
+  });
+}
+
+/* ---------- Member dropdown (alphabetical) ---------- */
+function buildMemberDropdown(){
+const sel = document.getElementById("memberSelect");
+const names = [...new Set(summaryData.map(r=>r.Name).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+sel.innerHTML = '<option value="">Select a member…</option>';
+names.forEach(n=>{ const o=document.createElement("option"); o.value=n; o.textContent=n; sel.appendChild(o); });
+
+
+sel.addEventListener("change", e => {
+if (e.target.value) {
+openProfile(e.target.value);
+// Switch to profile tab
+document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+document.querySelectorAll('.tab-content').forEach(t => t.style.display='none');
+document.querySelector('.tab-btn[data-tab="tab-profile"]').classList.add('active');
+document.getElementById('tab-profile').style.display = 'block';
+}
+});
+}
+
+/* ---------- Global Role filter ---------- */
+function buildGlobalRoleFilter(){
+  const allRoles = new Set();
+  [roleData,lmrData].forEach(sheet=>{
+    sheet.forEach(r=>{
+      Object.values(r).slice(2).forEach(v=>{ if(v && String(v).trim()) allRoles.add(String(v).trim()); });
+    });
+  });
+  allRoles.add("Speaker"); allRoles.add("Evaluator");
+  const list = listClean([...allRoles]);
+
+  const sel = document.getElementById("roleFilter");
+  sel.innerHTML = '<option value="">All roles</option>';
+  list.forEach(r=>{ const o=document.createElement("option"); o.value=r; o.textContent=r; sel.appendChild(o); });
+
+  // Filter listeners (affect profile + club)
+  sel.addEventListener("change", ()=>{ recomputeAndRender(); refreshClubCharts(); });
+  document.getElementById("startDate").addEventListener("change", ()=>{ recomputeAndRender(); refreshClubCharts(); });
+  document.getElementById("endDate").addEventListener("change", ()=>{ recomputeAndRender(); refreshClubCharts(); });
+}
+
+/* ---------- Profile ---------- */
+function openProfile(member){
+  currentMember = member;
+  document.getElementById("profileName").textContent = member;
+  document.getElementById("avatar").textContent = initials(member);
+
+  const tRow = totalData.find(r=>r.Name===member);
+  const totalPointsAll = tRow ? parseInt(tRow.Points||0) : 0;
+  document.getElementById("profileSub").textContent = `Official Total Points: ${totalPointsAll}`;
+  document.getElementById("totalPointsAll").textContent = totalPointsAll;
+
+  recomputeAndRender();
+}
+
+/* ---------- Recompute with filters ---------- */
+function recomputeAndRender(){
+  if(!currentMember) return;
+
+  const roleFilter = document.getElementById("roleFilter").value;
+  const sd = document.getElementById("startDate").value;
+  const ed = document.getElementById("endDate").value;
+  const startDate = sd ? new Date(sd) : null;
+  const endDate   = ed ? new Date(ed) : null;
+
+  const eaRow = eaData.find(r=>r.Name===currentMember)||{};
+  const rtRow = roleData.find(r=>r.Name===currentMember)||{};
+  const lmrRow= lmrData.find(r=>r.Name===currentMember)||{};
+  const spRow = spData.find(r=>r.Name===currentMember)||{};
+  const evRow = evData.find(r=>r.Name===currentMember)||{};
+  const lvlRow= lvlData.find(r=>r.Name===currentMember)||{};
+  const awdRow= awdData.find(r=>r.Name===currentMember)||{};
+  const exRow = excomData.find(r=>r.Name===currentMember)||{};
+  const ctRow = contestData.find(r=>r.Name===currentMember)||{};
+  const ttRow = ttData.find(r=>r.Name===currentMember)||{};
+
+  const dateKeys = dateKeysOf(eaRow);
+  const within = d=>{ const dt=safeDate(d); if(!dt) return true; if(startDate && dt<startDate) return false; if(endDate && dt>endDate) return false; return true; };
+
+  let meetingsCounted=0, filteredPoints=0; const distinctRoles=new Set();
+  const categoryPts = {"Early Attendance":0,"Role Taking":0,"Last Minute Roles":0,"Speeches":0,"Evaluations":0,"Level Completions":0,"Awards":0,"ExCom & Sub.":0,"Contests":0,"External/Other/TT":0};
+
+  const detailRows=[];
+
+  for(const d of dateKeys){
+    const att = val(eaRow,d);
+    const attended = !!(att && att!=="A" && att!=="E");
+    if(!attended) continue;
+    if(!within(d)) continue;
+
+    const role = val(rtRow,d)||"";
+    const lmr  = val(lmrRow,d)||"";
+    const sp   = val(spRow,d)||""; // keep actual speech text
+    const ev   = val(evRow,d)||"";
+    const lvl  = val(lvlRow,d)||"";
+    const awd  = val(awdRow,d)||"";
+
+    // role filter matching for this date
+    const rolesThisDate=[];
+    if(role) rolesThisDate.push(role);
+    if(lmr) rolesThisDate.push(lmr);
+    if(sp) rolesThisDate.push("Speaker");
+    if(ev==="TRUE") rolesThisDate.push("Evaluator");
+    if(roleFilter && !rolesThisDate.map(x=>String(x)).includes(roleFilter)) continue;
+
+    meetingsCounted++;
+
+    // Early attendance
+    const eaPts = POINT_RULES.earlyAttendance(att); filteredPoints+=eaPts; categoryPts["Early Attendance"]+=eaPts;
+
+    // Roles
+    const rPts = scoreRoleName(role); filteredPoints+=rPts; categoryPts["Role Taking"]+=rPts; if(role) distinctRoles.add(role);
+    const lPts = scoreRoleName(lmr);  filteredPoints+=lPts; categoryPts["Last Minute Roles"]+=lPts; if(lmr) distinctRoles.add(lmr);
+
+    // Speech / Evaluation
+    if(sp){ filteredPoints+=POINT_RULES.speech; categoryPts["Speeches"]+=POINT_RULES.speech; distinctRoles.add("Speaker"); }
+    if(ev==="TRUE"){ filteredPoints+=POINT_RULES.evaluationTrue; categoryPts["Evaluations"]+=POINT_RULES.evaluationTrue; distinctRoles.add("Evaluator"); }
+
+    // Awards & Levels (per date)
+    const aPts=scoreAwardText(awd); filteredPoints+=aPts; categoryPts["Awards"]+=aPts;
+    const lvPts=scoreLevelText(lvl); filteredPoints+=lvPts; categoryPts["Level Completions"]+=lvPts;
+
+    // details row (removed Last-Minute Role as requested)
+    detailRows.push({
+      Date:d,
+      Attendance:attendanceLabel(att||""),
+      Roles:role||"",
+      Speech: sp || "",
+      Evaluation: ev==="TRUE" ? "Yes" : ""
+    });
+  }
+
+  // Once-per-year/event categories (dedup, within date range)
+  function uniqNonEmptyVals(row){
+    const set=new Set();
+    Object.keys(row||{}).slice(2).forEach(k=>{
+      if(!within(k)) return;
+      const v=row[k]; if(v) set.add(String(v).trim());
+    });
+    return [...set];
+  }
+  const exUniq = uniqNonEmptyVals(exRow);
+  let exPtsTotal=0; exUniq.forEach(txt=>{
+    const t=txt.toLowerCase();
+    for(const [k,v] of Object.entries(POINT_RULES.excom)){ if(t.includes(k.toLowerCase())) { exPtsTotal+=v; break; } }
+  });
+  filteredPoints += exPtsTotal; categoryPts["ExCom & Sub."] += exPtsTotal;
+
+  const ctUniq = uniqNonEmptyVals(ctRow);
+  let ctPts=0; ctUniq.forEach(txt=>{ ctPts += scoreContestTextUniq(txt); });
+  filteredPoints += ctPts; categoryPts["Contests"] += ctPts;
+
+  const ttUniq = uniqNonEmptyVals(ttRow);
+  let ttPts=0; ttUniq.forEach(txt=>{ ttPts += scoreExternalText(txt); });
+  filteredPoints += ttPts; categoryPts["External/Other/TT"] += ttPts;
+
+  // KPIs
+  document.getElementById("meetingsCount").textContent = meetingsCounted;
+  document.getElementById("filteredPoints").textContent = Math.round(filteredPoints);
+  document.getElementById("distinctRoles").textContent = distinctRoles.size;
+
+  // charts
+  drawCategoryChart(categoryPts);
+  drawProgressChart(detailRows);
+
+  // details table (meeting-level)
+  if(dtDetails) dtDetails.destroy();
+  dtDetails = $("#detailTable").DataTable({
+    data:detailRows,
+    columns:[
+      {title:"Date", data:"Date"},
+      {title:"Attendance", data:"Attendance"},
+      {title:"Roles", data:"Roles"},
+      {title:"Speech (Project/Title)", data:"Speech"},
+      {title:"Evaluation", data:"Evaluation"}
+    ],
+    order:[[0,"asc"]],
+    pageLength:25,
+    searching:false,
+    columnDefs:[{targets:[0,1,2,3,4], className:'dt-center'}]
+  });
+
+  // Levels table (date range only)
+  const levelRows=[];
+  Object.keys(lvlRow||{}).slice(2).forEach(d=>{
+    if(!within(d)) return;
+    const v=lvlRow[d]; if(!v) return;
+    levelRows.push({Date:d, Level:v, Points:scoreLevelText(v)});
+  });
+  if(dtLevels) dtLevels.destroy();
+  dtLevels = $("#levelsTable").DataTable({
+    data:levelRows,
+    columns:[
+      {title:"Date", data:"Date"},
+      {title:"Level Completion", data:"Level"},
+      {title:"Points", data:"Points"}
+    ],
+    order:[[0,"asc"]],
+    pageLength:10,
+    searching:false,
+    columnDefs:[{targets:[2], className:'dt-center'}]
+  });
+
+  // Awards table (date range only)
+  const awardRows=[];
+  Object.keys(awdRow||{}).slice(2).forEach(d=>{
+    if(!within(d)) return;
+    const v=awdRow[d]; if(!v) return;
+    awardRows.push({Date:d, Award:v, Points:scoreAwardText(v)});
+  });
+  if(dtAwards) dtAwards.destroy();
+  dtAwards = $("#awardsTable").DataTable({
+    data:awardRows,
+    columns:[
+      {title:"Date", data:"Date"},
+      {title:"Award", data:"Award"},
+      {title:"Points", data:"Points"}
+    ],
+    order:[[0,"asc"]],
+    pageLength:10,
+    searching:false,
+    columnDefs:[{targets:[2], className:'dt-center'}]
+  });
+}
+
+/* ---------- Charts (member) ---------- */
+function drawCategoryChart(tally){
+  const labels=Object.keys(tally); const values=labels.map(k=>tally[k]);
+  if(chartCategory) chartCategory.destroy();
+  chartCategory = new Chart(document.getElementById("categoryChart").getContext("2d"),{
+    type:"bar",
+    data:{labels,datasets:[{label:"Weighted Points (Filtered)",data:values}]},
+    options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}
+  });
+}
+function drawProgressChart(detailRows){
+  const byDate={};
+  for(const r of detailRows){
+    let pts=0;
+    if(r.Attendance==="Early") pts += 1;
+    pts+=scoreRoleName(r.Roles);
+    if(r.Speech) pts+=POINT_RULES.speech;
+    if(r.Evaluation==="Yes") pts+=POINT_RULES.evaluationTrue;
+    byDate[r.Date]=(byDate[r.Date]||0)+pts;
+  }
+  const dates=Object.keys(byDate).sort((a,b)=>{const da=safeDate(a),db=safeDate(b); return (da&&db)?da-db:a.localeCompare(b);});
+  let cum=0; const series=dates.map(d=>cum+=byDate[d]);
+  if(chartProgress) chartProgress.destroy();
+  chartProgress = new Chart(document.getElementById("progressChart").getContext("2d"),{
+    type:"line",
+    data:{labels:dates,datasets:[{label:"Cumulative Weighted Points (Filtered)",data:series,fill:false,tension:.25}]},
+    options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}
+  });
+}
+
+/* ---------- Club-wide charts (respect filters) ---------- */
+function refreshClubCharts(){
+  const roleFilter = document.getElementById("roleFilter").value;
+  const sd = document.getElementById("startDate").value;
+  const ed = document.getElementById("endDate").value;
+  const startDate = sd ? new Date(sd) : null;
+  const endDate   = ed ? new Date(ed) : null;
+  const within = d=>{ const dt=safeDate(d); if(!dt) return true; if(startDate && dt<startDate) return false; if(endDate && dt>endDate) return false; return true; };
+
+  const allDatesSet=new Set();
+  eaData.forEach(r=>dateKeysOf(r).forEach(k=>{ if(within(k)) allDatesSet.add(k); }));
+  const dates=[...allDatesSet].sort((a,b)=>{const da=safeDate(a),db=safeDate(b); return (da&&db)?da-db:a.localeCompare(b);});
+
+  function indexByName(sheet){ const m=new Map(); sheet.forEach(r=>m.set(r.Name,r)); return m; }
+  const idxEA=indexByName(eaData), idxRT=indexByName(roleData), idxLMR=indexByName(lmrData), idxSP=indexByName(spData), idxEV=indexByName(evData);
+
+  const perDateSum={};
+  eaData.forEach(memberRow=>{
+    const name=memberRow.Name; if(!name) return;
+    dates.forEach(d=>{
+      const att = val(idxEA.get(name),d);
+      const attended = !!(att && att!=="A" && att!=="E");
+      if(!attended) return;
+
+      const role = val(idxRT.get(name)||{},d)||"";
+      const lmr  = val(idxLMR.get(name)||{},d)||"";
+      const sp   = val(idxSP.get(name)||{},d)||"";
+      const ev   = val(idxEV.get(name)||{},d)||"";
+
+      let pts=0;
+      if(!roleFilter){
+        pts += POINT_RULES.earlyAttendance(att);
+        pts += scoreRoleName(role);
+        pts += scoreRoleName(lmr);
+        if(sp) pts += POINT_RULES.speech;
+        if(ev==="TRUE") pts += POINT_RULES.evaluationTrue;
+      }else{
+        if(roleFilter==="Speaker" && sp) pts += POINT_RULES.speech;
+        else if(roleFilter==="Evaluator" && ev==="TRUE") pts += POINT_RULES.evaluationTrue;
+        else{
+          if(role===roleFilter) pts += scoreRoleName(role);
+          if(lmr===roleFilter)  pts += scoreRoleName(lmr);
+        }
+      }
+      if(pts>0) perDateSum[d]=(perDateSum[d]||0)+pts;
+    });
+  });
+
+  let cum=0; const series=dates.map(d=>cum+= (perDateSum[d]||0));
+  if(chartClubProgress) chartClubProgress.destroy();
+  chartClubProgress = new Chart(document.getElementById("clubProgressChart").getContext("2d"),{
+    type:"line",
+    data:{labels:dates,datasets:[{label: roleFilter? `Club Cumulative (${roleFilter})` : "Club Cumulative (All Meeting-level)", data:series, fill:false, tension:.25}]},
+    options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}
+  });
+
+  // Club points by role (bar)
+  const roleAgg = {};
+  [roleData,lmrData].forEach(sheet=>{
+    sheet.forEach(r=>{
+      dateKeysOf(r).forEach(d=>{
+        if(!within(d)) return;
+        const v=r[d]; if(!v) return;
+        const pts = scoreRoleName(v);
+        if(pts>0){
+          if(!roleFilter || roleFilter===v){
+            roleAgg[v]=(roleAgg[v]||0)+pts;
+          }
+        }
+      });
+    });
+  });
+  // Speakers & Evaluators
+  spData.forEach(r=>{
+    dateKeysOf(r).forEach(d=>{
+      if(!within(d)) return;
+      if(r[d]){
+        if(!roleFilter || roleFilter==="Speaker"){
+          roleAgg["Speaker"]=(roleAgg["Speaker"]||0)+POINT_RULES.speech;
+        }
+      }
+    });
+  });
+  evData.forEach(r=>{
+    dateKeysOf(r).forEach(d=>{
+      if(!within(d)) return;
+      if(r[d]==="TRUE"){
+        if(!roleFilter || roleFilter==="Evaluator"){
+          roleAgg["Evaluator"]=(roleAgg["Evaluator"]||0)+POINT_RULES.evaluationTrue;
+        }
+      }
+    });
+  });
+
+  const rLabels = Object.keys(roleAgg).sort((a,b)=>a.localeCompare(b));
+  const rValues = rLabels.map(k=>roleAgg[k]);
+  if(chartClubRole) chartClubRole.destroy();
+  chartClubRole = new Chart(document.getElementById("clubRoleChart").getContext("2d"),{
+    type:"bar",
+    data:{labels:rLabels,datasets:[{label: roleFilter? `Points (${roleFilter})` : "Club Points by Role", data:rValues}]},
+    options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}
+  });
+
+  const clubTotalAll = summaryData.reduce((a,r)=>a+(parseInt(r.Points||0)||0),0);
+  document.getElementById("clubTotalsNote").textContent =
+    roleFilter ? `Club charts filtered by role "${roleFilter}" and date range.` :
+                 `Note: Club cumulative uses meeting-level categories. Official club total (all categories): ${clubTotalAll}.`;
+}
+
+/* ---------- Tabs ---------- */
+document.querySelectorAll(".tab-btn").forEach(btn=>{
+  btn.addEventListener("click",()=>{
+    document.querySelectorAll(".tab-btn").forEach(b=>b.classList.remove("active"));
+    document.querySelectorAll(".tab-content").forEach(tab=>tab.style.display='none');
+    btn.classList.add("active");
+    document.getElementById(btn.dataset.tab).style.display='block';
+  });
+});
+</script>
+</body>
+</html>
