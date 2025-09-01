@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Toastmasters Club Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+<!-- jQuery, DataTables, Chart.js -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<link href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css" rel="stylesheet"/>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+<style>
+  /* Toastmasters branding & layout styling here... */
+  /* (Same as previous version for brevity) */
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <img src="https://www.toastmasters.org/-/media/toastmasters/brand-portal/files/logos/official-logo/primary-logo-color.ashx" alt="Toastmasters International">
+    <h1>Toastmasters Club Dashboard</h1>
+  </div>
+  <img src="club-logo.png" alt="Club Logo">
+</header>
+
+<div class="container">
+  <div class="topbar">
+    <div class="mode-toggle">
+      <span style="font-weight:700;">Display:</span>
+      <button id="modeAll" class="active">All Members</button>
+      <button id="modeMember">Member Only</button>
+    </div>
+  </div>
+
+  <div class="filters panel">
+    <!-- Filters markup (unchanged) -->
+  </div>
+
+  <div class="kpis">
+    <!-- KPI panels markup -->
+  </div>
+
+  <div class="charts">
+    <!-- Chart canvases -->
+  </div>
+
+  <div class="cards">
+    <!-- Meeting details panel -->
+  </div>
+
+  <div class="panel tabs-wrapper">
+    <!-- Raw data tabs and table -->
+  </div>
+
+  <footer>Live from Google Sheets • Toastmasters compliant</footer>
+</div>
+
+<script>
+const SHEET_ID = "2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx";
+const CATEGORY_KEYS = ["Early Attendance","Role Taking","Speeches","Evaluations","Level Completions","Awards","ExCom & Sub.","Contests","External","Other","Last Minute Roles"];
+const DETAIL_TABS = ["Total","Role Taking","Speeches","Evaluations","Level Completions","Awards","ExCom & Sub.","Early Attendance","Other","Last Minute Roles"];
+let cache = {};
+let currentMode = "ALL";
+let categoryChart, roleChart, cumulativeChart;
+
+async function fetchGViz(sheetName) {
+  if (cache[sheetName]) return cache[sheetName];
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}&tq=select%20*`;
+  const res = await fetch(url);
+  const txt = await res.text();
+  const match = txt.match(/google\.visualization\.Query\.setResponse\(([\s\S]*?)\);/);
+  if (!match) return [];
+  const json = JSON.parse(match[1]);
+  const cols = json.table.cols.map(c => c.label);
+  const rows = json.table.rows.map(r => {
+    const obj = {};
+    (r.c || []).forEach((cell, i) => {
+      const key = cols[i] || `col${i}`;
+      obj[key] = cell ? (cell.f ?? cell.v ?? "") : "";
+      if (key === "ExCom & Sub.") obj["ExCom_And_Sub"] = obj[key];
+    });
+    if (obj["ExCom_And_Sub"] === undefined) obj["ExCom_And_Sub"] = obj["ExCom & Sub."] || "";
+    return obj;
+  });
+  cache[sheetName] = rows;
+  return rows;
+}
+
+function showError(msg) {
+  const box = document.getElementById("errorBox");
+  box.textContent = msg;
+  box.classList.remove("hidden");
+}
+function clearError() {
+  document.getElementById("errorBox").classList.add("hidden");
+}
+function toISODate(d) {
+  return d.toISOString().slice(0,10);
+}
+function parseDate(str) {
+  const d = new Date(str);
+  if (!isNaN(d)) return d;
+  const m = str.match(/^(\d{1,2})[-\/ ]([A-Za-z]{3})[-\/ ](\d{2,4})$/);
+  if (m) {
+    const [_, dd, mon3, yy] = m;
+    const map = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+    const y = +yy < 100 ? 2000 + (+yy) : +yy;
+    return new Date(y, map[mon3], +dd);
+  }
+  return null;
+}
+function inRange(d,start,end) {
+  if (!d) return false;
+  if (start && d < start) return false;
+  if (end && d > end) return false;
+  return true;
+}
+function cleanedRows(rows) {
+  return rows.filter(r => r.Name && String(r.Name).trim());
+}
+function dateColumns(rows) {
+  const sample = rows[0] || {};
+  return Object.keys(sample).filter(k => k !== "Name" && k !== "Points" && parseDate(k));
+}
+
+async function initAll() {
+  try {
+    // Preload all data sheets
+    await Promise.all(DETAIL_TABS.map(fn => fetchGViz(fn)));
+    await fetchGViz("Summary"); // for leaderboard if needed
+
+    populateMemberFilter();
+    populateRoleFilter();
+    setupDatePickers();
+    buildLeaderboard();
+    loadDetailTable("Total", null);
+    recomputeAll();
+
+    // Add event listeners after data loads
+    document.querySelectorAll("#memberSelect, #roleFilter, #startDate, #endDate").forEach(el => el.addEventListener("change", recomputeAll));
+    document.querySelectorAll(".tab-btn").forEach(btn => btn.addEventListener("click", async () => {
+      document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      const mem = document.getElementById("memberSelect").value || null;
+      loadDetailTable(btn.dataset.sheet, mem);
+    }));
+    document.getElementById("modeAll").addEventListener("click", async () => {
+      currentMode="ALL"; document.getElementById("modeAll").classList.add("active");
+      document.getElementById("modeMember").classList.remove("active"); recomputeAll();
+    });
+    document.getElementById("modeMember").addEventListener("click", async () => {
+      currentMode="MEMBER"; document.getElementById("modeMember").classList.add("active");
+      document.getElementById("modeAll").classList.remove("active"); recomputeAll();
+    });
+
+  } catch(err) {
+    showError("Initialization failed: " + err);
+    console.error(err);
+  }
+}
+
+// ... [All other functions: populateMemberFilter, populateRoleFilter, setupDatePickers,
+// buildLeaderboard, recomputeAll, loadDetailTable, drawCategoryChart, drawRoleChart,
+// drawCumulative, renderMeetingDetails] ...
+
+// Start
+document.addEventListener("DOMContentLoaded", initAll);
+</script>
+</body>
+</html>
