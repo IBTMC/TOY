@@ -7,7 +7,15 @@
 
 <!-- Libraries -->
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
-<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://code.jquery.com/jquery-3.7.1.min.js">
+function toggleSection(header) {
+  const section = header.parentElement;
+  const isActive = section.classList.contains("active");
+  document.querySelectorAll("#tab-profile .profile-section").forEach(sec => sec.classList.remove("active"));
+  if (!isActive) section.classList.add("active");
+}
+
+</script>
 <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -98,6 +106,33 @@
   footer.tmftr { color:#fff; text-align:center; padding:18px 12px; margin-top:auto; }
   footer.tmftr a { color:#fff; text-decoration:none; border-bottom:1px dotted rgba(255,255,255,.6); }
   footer.tmftr a:hover { color:var(--tm-maroon); }
+
+/* Collapsible sections */
+.profile-section {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  margin-bottom: 12px;
+  overflow: hidden;
+  box-shadow: var(--tm-shadow);
+}
+.profile-section h3 {
+  margin: 0;
+  padding: 10px 14px;
+  background: var(--tm-navy);
+  color: #fff;
+  font-size: 15px;
+  cursor: pointer;
+  user-select: none;
+}
+.profile-section .section-content {
+  display: none;
+  padding: 10px;
+  background: #fff;
+}
+.profile-section.active .section-content {
+  display: block;
+}
+
 </style>
 </head>
 <body>
