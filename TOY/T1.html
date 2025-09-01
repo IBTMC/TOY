@@ -1,265 +1,487 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Toastmasters Dashboard</title>
-  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-  <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
-  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css"/>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f4f4f4;
-      margin: 0; padding: 0;
-    }
-    header {
-      background: #004165;
-      color: #fff;
-      padding: 15px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    header img {
-      height: 40px;
-    }
-    .container {
-      padding: 20px;
-    }
-    select {
-      padding: 8px;
-      font-size: 16px;
-      margin-bottom: 20px;
-    }
-    .tabs {
-      margin-bottom: 15px;
-    }
-    .tab-btn {
-      background: #d71a28;
-      border: none;
-      color: white;
-      padding: 8px 15px;
-      margin-right: 5px;
-      cursor: pointer;
-      border-radius: 5px;
-    }
-    .tab-btn.active-tab {
-      background: #004165;
-    }
-    .chart-container {
-      background: #fff;
-      padding: 15px;
-      margin-top: 20px;
-      border-radius: 10px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    }
-    #meetingSummaries > div {
-      margin-bottom: 12px;
-      padding: 10px;
-      background: #fff;
-      border-radius: 6px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    }
-  </style>
+<meta charset="UTF-8" />
+<title>Toastmasters Club Portal</title>
+
+<!-- jQuery + DataTables + Chart.js -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<link href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css" rel="stylesheet"/>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+<style>
+  :root{
+    --tm-navy:#004165;
+    --tm-red:#d71a28;
+    --tm-gold:#f2df74;
+    --bg:#f6f7fb;
+    --card:#ffffff;
+    --text:#1d2430;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial}
+  header{
+    background:var(--tm-navy); color:#fff; padding:14px 18px;
+    display:flex; align-items:center; gap:14px; justify-content:space-between
+  }
+  header .brand{display:flex;align-items:center;gap:12px}
+  header img{height:44px; background:#fff; border-radius:8px; padding:6px}
+  header h1{font-size:20px; margin:0; font-weight:700}
+  .container{max-width:1200px; margin:24px auto; padding:0 16px}
+
+  .filters, .kpis, .charts, .cards, .tabs {margin-top:18px}
+  .panel{
+    background:var(--card); border-radius:14px; padding:14px;
+    box-shadow:0 6px 18px rgba(0,0,0,.06)
+  }
+
+  .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .kpi{display:flex;flex-direction:column;gap:6px}
+  .kpi .label{font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.06em}
+  .kpi .value{font-size:28px;font-weight:800;color:var(--tm-navy)}
+
+  .filters .row{display:flex;flex-wrap:wrap;gap:10px}
+  .filters .row > div{flex:1 1 180px}
+  label{display:block;font-size:12px;color:#6b7280;margin-bottom:6px}
+  select,input[type="date"]{width:100%;padding:10px;border:1px solid #e5e7eb;border-radius:10px;background:#fff}
+
+  .charts{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .charts .panel{min-height:360px}
+  canvas{width:100%;height:280px}
+
+  .cards{display:grid;grid-template-columns:1fr;gap:12px}
+  .leaderboard table{width:100%}
+
+  .tabs{display:flex;flex-wrap:wrap;gap:8px}
+  .tab-btn{
+    border:none;padding:10px 14px;border-radius:10px;cursor:pointer;
+    background:var(--tm-red);color:#fff;font-weight:600
+  }
+  .tab-btn.active{background:var(--tm-navy)}
+  .hidden{display:none !important}
+
+  .error{background:#fff3f3;color:#8a1f1f;border:1px solid #f0c2c2;border-radius:10px;padding:10px;margin-top:12px}
+  footer{margin:32px 0;color:#6b7280;text-align:center;font-size:12px}
+  @media (max-width:980px){ .charts{grid-template-columns:1fr} .kpis{grid-template-columns:1fr} }
+</style>
 </head>
 <body>
 <header>
-  <div>
-    <img src="https://www.toastmasters.org/-/media/toastmasters/brand-portal/files/logos/official-logo/primary-logo/primary-logo-color.ashx" alt="Toastmasters Logo"/>
-    <img src="club-logo.png" alt="Club Logo"/> <!-- Replace with your club logo -->
+  <div class="brand">
+    <img src="https://www.toastmasters.org/-/media/toastmasters/brand-portal/files/logos/official-logo/primary-logo/primary-logo-color.ashx" alt="Toastmasters International">
+    <h1>Toastmasters Club Portal</h1>
   </div>
-  <h2>Toastmasters Club Dashboard</h2>
+  <img src="club-logo.png" alt="Club Logo"> <!-- replace with your file or URL -->
 </header>
 
 <div class="container">
-  <label for="memberSelect"><strong>Select Member:</strong></label>
-  <select id="memberSelect"></select>
 
-  <div class="tabs">
-    <button class="tab-btn" data-sheet="Total">Total</button>
-    <button class="tab-btn" data-sheet="Role Taking">Roles</button>
-    <button class="tab-btn" data-sheet="Speeches">Speeches</button>
-    <button class="tab-btn" data-sheet="Evaluations">Evaluations</button>
-    <button class="tab-btn" data-sheet="Level Completions">Level Completions</button>
-    <button class="tab-btn" data-sheet="Awards">Awards</button>
-    <button class="tab-btn" data-sheet="External">External</button>
-    <button class="tab-btn" data-sheet="Other">Other</button>
-    <button class="tab-btn" data-sheet="Last Minute Roles">Last Minute Roles</button>
+  <!-- Filters -->
+  <div class="filters panel">
+    <div class="row">
+      <div>
+        <label for="memberSelect">Select member</label>
+        <select id="memberSelect"></select>
+      </div>
+      <div>
+        <label for="roleFilter">Filter by role (optional)</label>
+        <select id="roleFilter">
+          <option value="__ALL__">All roles</option>
+        </select>
+      </div>
+      <div>
+        <label for="startDate">Start date</label>
+        <input id="startDate" type="date" />
+      </div>
+      <div>
+        <label for="endDate">End date</label>
+        <input id="endDate" type="date" />
+      </div>
+    </div>
+    <div id="errorBox" class="error hidden"></div>
   </div>
 
-  <table id="detailTable" class="display" style="width:100%"></table>
-
-  <div class="chart-container">
-    <h3>Progress Over Time</h3>
-    <canvas id="progressChart"></canvas>
+  <!-- KPIs -->
+  <div class="kpis">
+    <div class="kpi panel">
+      <div class="label">Meetings Counted</div>
+      <div id="kpiMeetings" class="value">—</div>
+    </div>
+    <div class="kpi panel">
+      <div class="label">Total Points</div>
+      <div id="kpiPoints" class="value">—</div>
+    </div>
+    <div class="kpi panel">
+      <div class="label">Distinct Roles</div>
+      <div id="kpiRoles" class="value">—</div>
+    </div>
   </div>
 
-  <div class="chart-container">
-    <h3>Role Breakdown</h3>
-    <canvas id="roleBreakdownChart"></canvas>
+  <!-- Charts -->
+  <div class="charts">
+    <div class="panel">
+      <h3>Category Breakdown</h3>
+      <canvas id="categoryChart"></canvas>
+    </div>
+    <div class="panel">
+      <h3>Role Breakdown</h3>
+      <canvas id="roleChart"></canvas>
+    </div>
+    <div class="panel">
+      <h3>Cumulative Progress</h3>
+      <canvas id="cumulativeChart"></canvas>
+    </div>
+    <div class="panel leaderboard">
+      <h3>Leaderboard (Club)</h3>
+      <table id="leaderboardTable" class="display"></table>
+    </div>
   </div>
 
-  <div class="chart-container">
-    <h3>Meeting Summaries</h3>
-    <div id="meetingSummaries"></div>
+  <!-- Per-Meeting Details -->
+  <div class="cards">
+    <div class="panel">
+      <h3>Per-Meeting Details</h3>
+      <div id="meetingSummaries"></div>
+    </div>
   </div>
+
+  <!-- Raw tabs -->
+  <div class="panel" style="margin-top:12px">
+    <div class="tabs">
+      <button class="tab-btn active" data-sheet="Total">Total</button>
+      <button class="tab-btn" data-sheet="Role Taking">Roles</button>
+      <button class="tab-btn" data-sheet="Speeches">Speeches</button>
+      <button class="tab-btn" data-sheet="Evaluations">Evaluations</button>
+      <button class="tab-btn" data-sheet="Level Completions">Level Completions</button>
+      <button class="tab-btn" data-sheet="Awards">Awards</button>
+      <button class="tab-btn" data-sheet="External">External</button>
+      <button class="tab-btn" data-sheet="Other">Other</button>
+      <button class="tab-btn" data-sheet="Last Minute Roles">Last Minute Roles</button>
+    </div>
+    <table id="detailTable" class="display" style="width:100%"></table>
+  </div>
+
+  <footer>Live from Google Sheets • Toastmasters branding compliant</footer>
 </div>
 
 <script>
 const SHEET_ID = "19x7OzxLlfG5YarEgksoX-drLaf12Ci98JpYkBvQpoMI";
+const DETAIL_TABS = ["Role Taking","Speeches","Evaluations","Level Completions","Awards","External","Other","Last Minute Roles"];
+const CATEGORY_KEYS = ["Early Attendance","Role Taking","Speeches","Evaluations","Level Completions","Awards","ExCom & Sub.","Contests","External","Other","Last Minute Roles"];
 
-// Generic fetcher (returns array of objects)
-async function fetchSheet(sheetName) {
-  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?sheet=${encodeURIComponent(sheetName)}&tq=select *`;
-  const response = await fetch(url);
-  const text = await response.text();
-  const json = JSON.parse(text.substr(47).slice(0, -2));
-  const cols = json.table.cols.map(c => c.label || "");
-  const rows = json.table.rows.map(r => {
-    const obj = {};
-    r.c.forEach((cell, i) => obj[cols[i] || `col${i}`] = cell ? cell.v : "");
-    return obj;
+let cache = {}; // per-sheet cache to minimize calls
+
+// --- robust GViz fetch and parse ---
+async function fetchGViz(sheetName){
+  if(cache[sheetName]) return cache[sheetName];
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?sheet=${encodeURIComponent(sheetName)}&tq=select%20*`;
+  const res = await fetch(url);
+  const txt = await res.text();
+
+  // Extract JSON safely
+  const m = txt.match(/google\.visualization\.Query\.setResponse\(([\s\S]*?)\);/);
+  if(!m){ showError(`Failed to parse GViz for sheet "${sheetName}".`); return []; }
+  const json = JSON.parse(m[1]);
+
+  const cols = (json.table.cols || []).map((c,i)=> c.label || `col${i}`);
+  const rows = (json.table.rows || []).map(r=>{
+    const o={};
+    (r.c||[]).forEach((cell,i)=>{
+      o[cols[i]] = cell ? (cell.f ?? cell.v ?? "") : "";
+    });
+    return o;
   });
+  cache[sheetName] = rows;
   return rows;
 }
 
-// Populate member dropdown
-async function loadMembers() {
-  const totalData = await fetchSheet("Total");
-  const members = totalData.map(r => r.Name).filter(Boolean);
-  const memberSelect = document.getElementById("memberSelect");
-  memberSelect.innerHTML = members.map(m => `<option value="${m}">${m}</option>`).join("");
+function showError(msg){
+  const box = document.getElementById('errorBox');
+  box.textContent = msg;
+  box.classList.remove('hidden');
+}
+function clearError(){
+  document.getElementById('errorBox').classList.add('hidden');
 }
 
-// Load detail table
-async function loadDetail(sheetName, member) {
-  const data = await fetchSheet(sheetName);
-  const filtered = data.filter(r => r.Name === member);
+// --- utilities ---
+function parseHeaderDate(label){
+  // try native
+  const d1 = new Date(label);
+  if(!isNaN(d1)) return d1;
+  // try dd-MMM-yy (e.g., 12-Jul-25)
+  const m = String(label).trim().match(/^(\d{1,2})[-\/\s]([A-Za-z]{3})[-\/\s](\d{2,4})$/);
+  if(m){
+    const [_,dd,mon,yy] = m;
+    const months = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+    const year = (+yy < 100) ? 2000 + (+yy) : +yy;
+    return new Date(year, months[mon], +dd);
+  }
+  return null;
+}
+function inRange(date, start, end){
+  if(!date) return false;
+  if(start && date < start) return false;
+  if(end && date > end) return false;
+  return true;
+}
+function toLabel(d){
+  return d.toISOString().slice(0,10);
+}
+
+// --- member + role options ---
+async function populateMembers(){
+  const total = await fetchGViz("Total");
+  const members = total.map(r=>r.Name).filter(Boolean);
+  const sel = document.getElementById('memberSelect');
+  sel.innerHTML = members.map(m=>`<option value="${m}">${m}</option>`).join('');
+}
+async function populateRoleFilter(){
+  const roles = await fetchGViz("Role Taking");
+  const set = new Set();
+  roles.forEach(row=>{
+    Object.entries(row).forEach(([k,v])=>{
+      if(k==="Name" || k==="Points") return;
+      if(v && String(v).trim()) set.add(String(v).trim());
+    });
+  });
+  const sel = document.getElementById('roleFilter');
+  sel.innerHTML = `<option value="__ALL__">All roles</option>` + [...set].sort().map(r=>`<option>${r}</option>`).join('');
+}
+
+// --- KPIs ---
+async function updateKPIs(member, start, end, roleFilter){
+  // meetings counted = distinct date columns across detail tabs within range
+  const roleSheet = await fetchGViz("Role Taking");
+  const headers = Object.keys(roleSheet[0] || {}).filter(k=>k!=="Name" && k!=="Points");
+  const dates = headers.map(parseHeaderDate).filter(Boolean);
+  const meetingsCounted = dates.filter(d=>inRange(d,start,end)).length;
+  document.getElementById('kpiMeetings').textContent = meetingsCounted || 0;
+
+  // total points = from Total sheet 'Points'
+  const total = await fetchGViz("Total");
+  const row = total.find(r=>r.Name===member);
+  const totalPts = row && row.Points ? Number(row.Points) : 0;
+  document.getElementById('kpiPoints').textContent = totalPts;
+
+  // distinct roles (filtered by date and optional role)
+  const roleRow = roleSheet.find(r=>r.Name===member) || {};
+  const distinct = new Set();
+  Object.entries(roleRow).forEach(([k,v])=>{
+    if(!v || k==="Name"||k==="Points") return;
+    const d = parseHeaderDate(k);
+    if(!d) return;
+    if(!inRange(d,start,end)) return;
+    const val = String(v).trim();
+    if(roleFilter && roleFilter!=="__ALL__" && val !== roleFilter) return;
+    distinct.add(val);
+  });
+  document.getElementById('kpiRoles').textContent = distinct.size;
+}
+
+// --- Leaderboard ---
+async function buildLeaderboard(){
+  const total = await fetchGViz("Total");
+  const data = total.filter(r=>r.Name).map(r=>({Name:r.Name, Points:Number(r.Points||0)}));
+  data.sort((a,b)=>b.Points-a.Points);
+
+  if ($.fn.DataTable.isDataTable("#leaderboardTable")) {
+    $("#leaderboardTable").DataTable().clear().rows.add(data).draw();
+  } else {
+    $("#leaderboardTable").DataTable({
+      data,
+      columns:[{title:"Member",data:"Name"},{title:"Points",data:"Points"}],
+      paging:false, searching:false, info:false, order:[[1,"desc"]]
+    });
+  }
+}
+
+// --- Raw table tab ---
+async function loadDetailTable(sheetName, member){
+  const rows = await fetchGViz(sheetName);
+  // drop the "second header row" if present (Name empty)
+  const cleaned = rows.filter(r=>r.Name && String(r.Name).trim() !== "");
+  const filtered = member ? cleaned.filter(r=>r.Name===member) : cleaned;
 
   if ($.fn.DataTable.isDataTable("#detailTable")) {
     $("#detailTable").DataTable().destroy();
     $("#detailTable").empty();
   }
-
-  if (filtered.length) {
-    $("#detailTable").DataTable({
-      data: filtered,
-      columns: Object.keys(filtered[0]).map(c => ({ title: c, data: c })),
-      pageLength: 10
-    });
-  }
-}
-
-// Progress chart (line from Total)
-async function loadProgress(member) {
-  const totalData = await fetchSheet("Total");
-  const row = totalData.find(r => r.Name === member);
-  if (!row) return;
-
-  const labels = Object.keys(row).filter(k => k !== "Name");
-  const values = labels.map(l => parseInt(row[l] || 0));
-
-  const ctx = document.getElementById("progressChart").getContext("2d");
-  if (window.progressChart) window.progressChart.destroy();
-  window.progressChart = new Chart(ctx, {
-    type: "line",
-    data: { labels, datasets: [{ label: "Points", data: values, fill: false, borderColor: "#004165" }] }
+  if (!filtered.length){ return; }
+  $("#detailTable").DataTable({
+    data: filtered,
+    columns: Object.keys(filtered[0]).map(c=>({title:c,data:c})),
+    pageLength: 10
   });
 }
 
-// Role breakdown pie chart
-async function loadRoleBreakdown(member) {
-  const roleData = await fetchSheet("Role Taking");
-  const row = roleData.find(r => r.Name === member);
-  if (!row) return;
-
-  const roleCounts = {};
-  Object.keys(row).forEach(key => {
-    if (key === "Name" || key === "Points") return;
-    const value = row[key];
-    if (value && value.trim() !== "") {
-      roleCounts[value] = (roleCounts[value] || 0) + 1;
+// --- Category Breakdown (bar) from Total row categories ---
+function pickCategories(totalRow){
+  const data = [];
+  CATEGORY_KEYS.forEach(k=>{
+    if(k in totalRow){
+      let v = Number(totalRow[k] || 0);
+      data.push({label:k, value:v});
     }
   });
+  return data;
+}
+let categoryChart, roleChart, cumulativeChart;
 
-  const ctx = document.getElementById("roleBreakdownChart").getContext("2d");
-  if (window.roleChart) window.roleChart.destroy();
-  window.roleChart = new Chart(ctx, {
-    type: "pie",
-    data: {
-      labels: Object.keys(roleCounts),
-      datasets: [{ data: Object.values(roleCounts), backgroundColor: ["#004165","#d71a28","#f2df74","#007A5E","#7A003C","#ff9933","#3399ff","#9933ff","#66cc99","#ffcc00"] }]
-    },
-    options: { plugins: { legend: { position: "bottom" } } }
+async function drawCategoryChart(member){
+  const total = await fetchGViz("Total");
+  const row = total.find(r=>r.Name===member) || {};
+  const items = pickCategories(row);
+  const ctx = document.getElementById('categoryChart').getContext('2d');
+  if (categoryChart) categoryChart.destroy();
+  categoryChart = new Chart(ctx, {
+    type:"bar",
+    data:{ labels: items.map(i=>i.label), datasets:[{label:"Points", data: items.map(i=>i.value)}] },
+    options:{ responsive:true, plugins:{legend:{display:false}} }
   });
 }
 
-// Meeting summaries
-async function loadMeetingSummaries(member) {
-  const tabs = ["Role Taking","Speeches","Evaluations","Level Completions","Awards","External","Other","Last Minute Roles"];
-  const container = document.getElementById("meetingSummaries");
-  container.innerHTML = "";
-  const meetingData = {};
+// --- Role Breakdown Pie (member, date+role filters respected) ---
+async function drawRoleChart(member, start, end, roleFilter){
+  const roleSheet = await fetchGViz("Role Taking");
+  const row = roleSheet.find(r=>r.Name===member) || {};
+  const counts={};
+  Object.entries(row).forEach(([k,v])=>{
+    if(!v||k==="Name"||k==="Points") return;
+    const d = parseHeaderDate(k);
+    if(!d) return;
+    if(!inRange(d,start,end)) return;
+    const val = String(v).trim();
+    if(roleFilter && roleFilter!=="__ALL__" && val !== roleFilter) return;
+    counts[val] = (counts[val]||0)+1;
+  });
+  const ctx = document.getElementById('roleChart').getContext('2d');
+  if (roleChart) roleChart.destroy();
+  roleChart = new Chart(ctx, {
+    type:"pie",
+    data:{ labels:Object.keys(counts), datasets:[{ data:Object.values(counts) }] },
+    options:{ responsive:true, plugins:{ legend:{position:"bottom"} } }
+  });
+}
 
-  for (const tab of tabs) {
-    const data = await fetchSheet(tab);
-    const row = data.find(r => r.Name === member);
-    if (!row) continue;
-
-    Object.keys(row).forEach(key => {
-      if (key === "Name" || key === "Points") return;
-      const value = row[key];
-      if (value && value.trim() !== "") {
-        if (!meetingData[key]) meetingData[key] = [];
-        meetingData[key].push(`${tab}: ${value}`);
-      }
+// --- Cumulative Progress (activities over time across detail tabs) ---
+async function drawCumulative(member, start, end, roleFilter){
+  // collect per-meeting "activity units" across all detail tabs
+  const buckets = {}; // dateLabel -> count
+  for (const tab of DETAIL_TABS){
+    const rows = await fetchGViz(tab);
+    const row = rows.find(r=>r.Name===member);
+    if(!row) continue;
+    Object.entries(row).forEach(([k,v])=>{
+      if(!v||k==="Name"||k==="Points") return;
+      const d = parseHeaderDate(k);
+      if(!d) return;
+      if(!inRange(d,start,end)) return;
+      const val = String(v).trim();
+      if(roleFilter && roleFilter!=="__ALL__" && tab==="Role Taking" && val !== roleFilter) return;
+      const lab = toLabel(d);
+      buckets[lab] = (buckets[lab]||0) + 1;
     });
   }
-
-  Object.keys(meetingData).forEach(meeting => {
-    const div = document.createElement("div");
-    div.innerHTML = `<strong>${meeting}</strong><ul>` + meetingData[meeting].map(item => `<li>${item}</li>`).join("") + `</ul>`;
-    container.appendChild(div);
+  const sortedDates = Object.keys(buckets).sort();
+  let cum=0;
+  const y = sortedDates.map(d=> (cum += buckets[d]));
+  const ctx = document.getElementById('cumulativeChart').getContext('2d');
+  if (cumulativeChart) cumulativeChart.destroy();
+  cumulativeChart = new Chart(ctx, {
+    type:"line",
+    data:{ labels:sortedDates, datasets:[{label:"Cumulative Activities", data:y, fill:false}] },
+    options:{ responsive:true, plugins:{legend:{display:false}} }
   });
-
-  if (!Object.keys(meetingData).length) container.innerHTML = "<p>No meeting activity found.</p>";
 }
 
-// Initialization
-document.addEventListener("DOMContentLoaded", async () => {
-  await loadMembers();
-  const memberSelect = document.getElementById("memberSelect");
-  const initialMember = memberSelect.value;
+// --- Per-Meeting Details (cards) ---
+async function renderMeetingDetails(member, start, end, roleFilter){
+  const container = document.getElementById('meetingSummaries');
+  container.innerHTML = "";
+  const byMeeting = {}; // dateLabel -> [ strings ]
 
-  // Default tab = Total
-  const defaultBtn = document.querySelector(".tab-btn[data-sheet='Total']");
-  defaultBtn.classList.add("active-tab");
-  await loadDetail("Total", initialMember);
-  await loadProgress(initialMember);
-  await loadRoleBreakdown(initialMember);
-  await loadMeetingSummaries(initialMember);
-
-  // Member change
-  memberSelect.addEventListener("change", async e => {
-    const member = e.target.value;
-    const activeSheet = document.querySelector(".tab-btn.active-tab").dataset.sheet;
-    await loadDetail(activeSheet, member);
-    await loadProgress(member);
-    await loadRoleBreakdown(member);
-    await loadMeetingSummaries(member);
-  });
-
-  // Tab switching
-  document.querySelectorAll(".tab-btn").forEach(btn => {
-    btn.addEventListener("click", async () => {
-      document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active-tab"));
-      btn.classList.add("active-tab");
-      const member = memberSelect.value;
-      await loadDetail(btn.dataset.sheet, member);
-      await loadMeetingSummaries(member);
+  for (const tab of DETAIL_TABS){
+    const rows = await fetchGViz(tab);
+    const row = rows.find(r=>r.Name===member);
+    if(!row) continue;
+    Object.entries(row).forEach(([k,v])=>{
+      if(!v||k==="Name"||k==="Points") return;
+      const d = parseHeaderDate(k);
+      if(!d) return;
+      if(!inRange(d,start,end)) return;
+      const val = String(v).trim();
+      if(roleFilter && roleFilter!=="__ALL__" && tab==="Role Taking" && val !== roleFilter) return;
+      const lab = toLabel(d);
+      if(!byMeeting[lab]) byMeeting[lab]=[];
+      byMeeting[lab].push(`${tab}: ${val}`);
     });
+  }
+  const days = Object.keys(byMeeting).sort();
+  if(!days.length){ container.innerHTML = "<p>No meeting activity for current filters.</p>"; return; }
+  days.forEach(day=>{
+    const div = document.createElement('div');
+    div.className="meeting panel";
+    div.style.marginBottom="10px";
+    div.innerHTML = `<strong>${day}</strong><ul>${byMeeting[day].map(x=>`<li>${x}</li>`).join("")}</ul>`;
+    container.appendChild(div);
   });
+}
+
+// --- main recompute ---
+async function recomputeAll(){
+  clearError();
+  const member = document.getElementById('memberSelect').value;
+  const rf = document.getElementById('roleFilter').value;
+  const start = document.getElementById('startDate').value ? new Date(document.getElementById('startDate').value) : null;
+  const end   = document.getElementById('endDate').value ? new Date(document.getElementById('endDate').value) : null;
+
+  await updateKPIs(member, start, end, rf);
+  await drawCategoryChart(member);
+  await drawRoleChart(member, start, end, rf);
+  await drawCumulative(member, start, end, rf);
+  await renderMeetingDetails(member, start, end, rf);
+
+  // refresh raw table for active tab
+  const activeBtn = document.querySelector('.tab-btn.active');
+  if (activeBtn){
+    const sheetName = activeBtn.dataset.sheet;
+    await loadDetailTable(sheetName, member);
+  }
+}
+
+// --- init ---
+document.addEventListener('DOMContentLoaded', async ()=>{
+  try{
+    await populateMembers();
+    await populateRoleFilter();
+    // Default active tab already set to Total in markup
+    const member = document.getElementById('memberSelect').value;
+    await loadDetailTable('Total', member);
+    await buildLeaderboard();
+    await recomputeAll();
+
+    // filters
+    document.getElementById('memberSelect').addEventListener('change', recomputeAll);
+    document.getElementById('roleFilter').addEventListener('change', recomputeAll);
+    document.getElementById('startDate').addEventListener('change', recomputeAll);
+    document.getElementById('endDate').addEventListener('change', recomputeAll);
+
+    // tabs
+    document.querySelectorAll('.tab-btn').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+        btn.classList.add('active');
+        const member = document.getElementById('memberSelect').value;
+        await loadDetailTable(btn.dataset.sheet, member);
+      });
+    });
+
+  }catch(e){
+    showError("Initialization error: "+ (e?.message || e));
+    console.error(e);
+  }
 });
 </script>
 </body>
