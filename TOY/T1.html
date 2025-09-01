@@ -10,7 +10,9 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body { font-family: Arial, sans-serif; margin: 20px; background: #f4f4f4; }
-    h1 { color: #004165; text-align: center; }
+    header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    header img { height: 60px; }
+    h1 { color: #004165; text-align: center; flex: 1; }
     .controls { margin: 20px 0; text-align: center; }
     select { padding: 5px; }
     .tabs { text-align: center; margin-bottom: 20px; }
@@ -26,7 +28,11 @@
   </style>
 </head>
 <body>
-  <h1>Toastmasters Club Dashboard</h1>
+  <header>
+    <img src="https://www.toastmasters.org/-/media/toastmastersweb/icons/tm-logo-color.ashx" alt="Toastmasters International Logo">
+    <h1>Toastmasters Club Dashboard</h1>
+    <img src="YOUR_CLUB_LOGO.png" alt="Club Logo">
+  </header>
 
   <div class="controls">
     <label for="memberSelect"><strong>Select Member:</strong></label>
@@ -64,7 +70,7 @@ async function fetchSheet(sheetName) {
   const response = await fetch(url);
   const text = await response.text();
 
-  if (sheetName === "Summary" || sheetName === "Total") {
+  if (sheetName === "Total") {
     return Papa.parse(text, { header: true }).data.filter(r => r.Name);
   }
 
@@ -72,26 +78,26 @@ async function fetchSheet(sheetName) {
   if (!parsed.length) return [];
 
   const headers = parsed[0];
-  const subHeaders = parsed[1];
+  const subHeaders = parsed[1] || [];
   const finalHeaders = headers.map((h, i) => {
-    if (subHeaders[i]) return `${h} ${subHeaders[i]}`.trim();
+    if (subHeaders[i] && subHeaders[i] !== "") return `${h} ${subHeaders[i]}`.trim();
     return h;
   });
 
   const dataRows = parsed.slice(2);
-  return dataRows.map(row => {
-    const obj = {};
-    finalHeaders.forEach((h, i) => {
-      obj[h] = row[i];
+  return dataRows
+    .filter(r => r[0] && r[0].trim() !== "")
+    .map(row => {
+      const obj = {};
+      finalHeaders.forEach((h, i) => { obj[h] = row[i]; });
+      return obj;
     });
-    return obj;
-  });
 }
 
-// Populate members (from Summary)
-async function loadSummary() {
-  const summaryData = await fetchSheet("Summary");
-  const members = summaryData.map(r => r.Name).filter(Boolean);
+// Populate members (from Total)
+async function loadMembers() {
+  const totalData = await fetchSheet("Total");
+  const members = totalData.map(r => r.Name).filter(Boolean);
   const memberSelect = document.getElementById("memberSelect");
   memberSelect.innerHTML = members.map(m => `<option value="${m}">${m}</option>`).join("");
 }
@@ -115,7 +121,7 @@ async function loadDetail(sheetName, member) {
   }
 }
 
-// Line chart for points (from Total)
+// Line chart from Total
 async function loadExtendedProgress(member) {
   const totalData = await fetchSheet("Total");
   const row = totalData.find(r => r.Name === member);
@@ -135,7 +141,7 @@ async function loadExtendedProgress(member) {
   });
 }
 
-// Pie chart for role breakdown
+// Pie chart from Role Taking
 async function loadRoleBreakdown(member) {
   const roleData = await fetchSheet("Role Taking");
   const row = roleData.find(r => r.Name === member);
@@ -164,9 +170,7 @@ async function loadRoleBreakdown(member) {
         ]
       }]
     },
-    options: {
-      plugins: { legend: { position: "bottom" } }
-    }
+    options: { plugins: { legend: { position: "bottom" } } }
   });
 }
 
@@ -177,7 +181,6 @@ async function loadMeetingSummaries(member) {
   container.innerHTML = "";
 
   const meetingData = {};
-
   for (const tab of tabs) {
     const data = await fetchSheet(tab);
     const row = data.find(r => r.Name === member);
@@ -214,11 +217,11 @@ async function loadMeetingSummaries(member) {
 
 // Init
 document.addEventListener("DOMContentLoaded", async () => {
-  await loadSummary();
+  await loadMembers();
   const memberSelect = document.getElementById("memberSelect");
   const initialMember = memberSelect.value;
 
-  // Default active tab = Total
+  // Default tab = Total
   const defaultBtn = document.querySelector(".tab-btn[data-sheet='Total']");
   defaultBtn.classList.add("active-tab");
   defaultBtn.classList.remove("inactive-tab");
