@@ -1,163 +1,482 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Toastmasters of the Year Tracker</title>
+  <meta charset="UTF-8" />
+  <title>Toastmasters Club Dashboard</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <!-- jQuery -->
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-  <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
-  <script src="https://cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <!-- DataTables -->
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
+  <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+  <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- PapaParse -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
   <style>
-    body { font-family: Arial, sans-serif; background:#f9f9f9; margin:0; padding:20px; }
-    header { background:#004165; color:white; padding:15px; border-radius:8px; }
-    h1 { margin:0; font-size:22px; }
-    .filters, .stats { margin:15px 0; }
-    .filters select, .filters input { margin-right:10px; }
-    .stats { display:flex; gap:20px; }
-    .stat-card { background:white; padding:10px 15px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.1); }
-    .tab-buttons { margin:15px 0; }
-    .tab-buttons button { margin-right:8px; padding:6px 12px; border:none; border-radius:5px; background:#004165; color:white; cursor:pointer; }
-    .tab-buttons button.active { background:#d71e28; }
-    .tab-content { display:none; }
-    .tab-content.active { display:block; }
-    table { width:100%; border-collapse:collapse; margin-top:15px; }
-    table th, table td { border:1px solid #ccc; padding:6px; }
+    :root {
+      --tm-maroon:#772432;
+      --tm-navy:#004165;
+      --tm-blue:#0072CE;
+      --bg:#f7f7fb;
+      --card:#ffffff;
+      --shadow:0 2px 8px rgba(0,0,0,.08);
+      --radius:14px;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#1f2937}
+    header{
+      background:linear-gradient(90deg,var(--tm-maroon),var(--tm-navy));
+      color:#fff;padding:14px 20px;display:flex;align-items:center;gap:16px
+    }
+    header img{height:48px}
+    header h1{font-size:20px;margin:0;flex:1}
+    .container{padding:20px;max-width:1200px;margin:0 auto}
+    .panel{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px}
+    .filters{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px}
+    .filters label{font-size:14px;color:#334155;display:flex;flex-direction:column;gap:6px}
+    select,input[type="date"]{
+      padding:8px 10px;border:1px solid #e5e7eb;border-radius:10px;background:#fff;min-width:220px
+    }
+    .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:16px}
+    .kpi{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px;text-align:center}
+    .kpi h2{margin:0;font-size:28px;color:var(--tm-navy)}
+    .kpi p{margin:6px 0 0;color:#6b7280}
+    .tabs{display:flex;gap:8px;margin:18px 0}
+    .tabs button{
+      background:var(--tm-navy);color:#fff;border:0;border-radius:10px;padding:10px 14px;cursor:pointer
+    }
+    .tabs button.active{background:var(--tm-blue)}
+    .tabcontent{display:none}
+    .tabcontent.active{display:block}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    canvas{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow);padding:10px}
+    table.dataTable thead th{background:#eef2ff}
+    .muted{color:#6b7280}
+    @media (max-width:900px){
+      .kpis{grid-template-columns:1fr}
+      .grid{grid-template-columns:1fr}
+    }
   </style>
 </head>
 <body>
 <header>
-  <h1>Toastmasters of the Year Tracker</h1>
+  <img src="https://www.toastmasters.org/~/media/Toastmasters/Branding/logo/Toastmasters_Logo_Horizontal_RGB.ashx" alt="Toastmasters logo">
+  <h1>Toastmasters of the Year – Interactive Dashboard</h1>
+  <img src="https://via.placeholder.com/140x50.png?text=Club+Logo" alt="Club logo">
 </header>
 
-<div class="filters">
-  <label>Select member:
-    <select id="memberSelect"><option value="">— Select —</option></select>
-  </label>
-  <label>Filter by role:
-    <select id="roleSelect"><option value="">All roles</option></select>
-  </label>
-  <label>Start date: <input type="date" id="startDate"></label>
-  <label>End date: <input type="date" id="endDate"></label>
-</div>
+<div class="container">
+  <div class="panel">
+    <div class="filters">
+      <label> Select member
+        <select id="memberSelect">
+          <option value="">— Select —</option>
+        </select>
+      </label>
+      <label> Filter by role (optional)
+        <select id="roleSelect">
+          <option value="">All roles</option>
+        </select>
+      </label>
+      <!-- dates wired but optional; keep for future -->
+      <label> Start date <input type="date" id="startDate"></label>
+      <label> End date <input type="date" id="endDate"></label>
+    </div>
 
-<div class="stats">
-  <div class="stat-card">Meetings Counted: <span id="meetingsCount">0</span></div>
-  <div class="stat-card">Total Points: <span id="totalPoints">0</span></div>
-  <div class="stat-card">Distinct Roles: <span id="distinctRoles">0</span></div>
-</div>
+    <div class="kpis">
+      <div class="kpi">
+        <h2 id="meetingsCount">0</h2>
+        <p>Meetings Counted</p>
+      </div>
+      <div class="kpi">
+        <h2 id="totalPoints">0</h2>
+        <p>Total Points</p>
+      </div>
+      <div class="kpi">
+        <h2 id="distinctRoles">0</h2>
+        <p>Distinct Roles</p>
+      </div>
+    </div>
 
-<div class="tab-buttons">
-  <button class="tab-btn active" data-tab="total">Total</button>
-  <button class="tab-btn" data-tab="early">Early Attendance</button>
-  <button class="tab-btn" data-tab="roles">Role Taking</button>
-  <button class="tab-btn" data-tab="speeches">Speeches</button>
-  <button class="tab-btn" data-tab="evals">Evaluations</button>
-  <button class="tab-btn" data-tab="leaderboard">Leaderboard</button>
-</div>
+    <div class="tabs">
+      <button class="tablink active" data-tab="leaderboard">Leaderboard (Club)</button>
+      <button class="tablink" data-tab="category">Category Breakdown</button>
+      <button class="tablink" data-tab="progress">Cumulative Progress</button>
+      <button class="tablink" data-tab="details">Per-Meeting Details</button>
+    </div>
 
-<div id="total" class="tab-content active">
-  <h2>Total Breakdown</h2>
-  <table id="totalTable"></table>
-</div>
+    <!-- Leaderboard -->
+    <div id="leaderboard" class="tabcontent active">
+      <table id="leaderboardTable" class="display" style="width:100%"></table>
+      <p class="muted">Source: Summary sheet</p>
+    </div>
 
-<div id="early" class="tab-content">
-  <h2>Early Attendance</h2>
-  <table id="earlyTable"></table>
-</div>
+    <!-- Category & Progress -->
+    <div id="category" class="tabcontent">
+      <div class="grid">
+        <canvas id="categoryChart"></canvas>
+        <div class="panel">
+          <h3 style="margin-top:0">What this shows</h3>
+          <p class="muted">Pie chart of the selected member’s points by category (from the <em>Total</em> sheet).</p>
+        </div>
+      </div>
+    </div>
 
-<div id="roles" class="tab-content">
-  <h2>Role Taking</h2>
-  <table id="rolesTable"></table>
-</div>
+    <div id="progress" class="tabcontent">
+      <div class="grid">
+        <canvas id="progressChart"></canvas>
+        <div class="panel">
+          <h3 style="margin-top:0">How it’s calculated</h3>
+          <p class="muted">Cumulative sum of category points (from the <em>Total</em> sheet), shown left-to-right across categories.</p>
+        </div>
+      </div>
+    </div>
 
-<div id="speeches" class="tab-content">
-  <h2>Speeches</h2>
-  <table id="speechesTable"></table>
-</div>
-
-<div id="evals" class="tab-content">
-  <h2>Evaluations</h2>
-  <table id="evalsTable"></table>
-</div>
-
-<div id="leaderboard" class="tab-content">
-  <h2>Leaderboard</h2>
-  <table id="leaderboardTable"></table>
+    <!-- Details -->
+    <div id="details" class="tabcontent">
+      <table id="detailTable" class="display" style="width:100%"></table>
+      <p class="muted">Filtered by selected member and (optionally) role.</p>
+    </div>
+  </div>
 </div>
 
 <script>
-const sheetUrls = {
+/* ----------------- SHEET LINKS (CSV) ----------------- */
+const CSV = {
   "Summary": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=1556398249&single=true&output=csv",
   "Total": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=1939085341&single=true&output=csv",
   "Early Attendance": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=1928408168&single=true&output=csv",
   "Role Taking": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=23380471&single=true&output=csv",
+  "Last Minute Roles": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=10890228&single=true&output=csv",
   "Speeches": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=170161438&single=true&output=csv",
-  "Evaluations": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=335593996&single=true&output=csv"
+  "Evaluations": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=335593996&single=true&output=csv",
+  "Level Completions": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=1646576393&single=true&output=csv",
+  "Awards": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=302763050&single=true&output=csv",
+  "ExCom & Sub.": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=710668362&single=true&output=csv",
+  "Contests": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=859627444&single=true&output=csv",
+  "Table Topics": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=618267332&single=true&output=csv"
 };
 
-let sheets = {};
+/* ----------------- STATE ----------------- */
+let SHEETS = {};
+let rolesSet = new Set();   // unique role names (from Role Taking, Last Minute Roles) + Speaker + Evaluator
+let categoryChart, progressChart;
+let detailDT;
 
-function loadSheets() {
-  Object.entries(sheetUrls).forEach(([name,url]) => {
+/* ----------------- LOAD & PARSE ----------------- */
+function loadAllSheets() {
+  const entries = Object.entries(CSV);
+  let loaded = 0;
+
+  entries.forEach(([name, url]) => {
     Papa.parse(url, {
-      download:true,
-      header:true,
-      skipEmptyLines:true,
+      download: true,
+      header: true,
+      skipEmptyLines: true,
       beforeFirstChunk: function(chunk) {
-        let rows = chunk.split(/\r?\n/);
-        if(name==="Total") {
-          rows[0] = rows[1]; // use row 2 as headers
-          rows.splice(1,1);  // remove row 2
+        // Dual parsing strategy:
+        // - Total: row 2 has the real headers. Replace row 1 by row 2 and remove row 2.
+        // - Others: row 1 is headers, row 2 are meeting numbers. Remove row 2.
+        const rows = chunk.split(/\r?\n/);
+        if (name === "Total") {
+          if (rows.length > 1) {
+            rows[0] = rows[1];
+            rows.splice(1,1);
+          }
         } else {
-          rows.splice(1,1); // remove row 2 with meeting numbers
+          if (rows.length > 1) rows.splice(1,1);
         }
         return rows.join("\n");
       },
-      complete: function(results) {
-        sheets[name] = results.data;
-        console.log("Loaded:", name, results.data);
-        if(name==="Total") populateMembers(results.data);
-        if(name==="Summary") populateLeaderboard(results.data);
-        if(name==="Total") populateTable("#totalTable", results.data);
-        if(name==="Early Attendance") populateTable("#earlyTable", results.data);
-        if(name==="Role Taking") populateTable("#rolesTable", results.data);
-        if(name==="Speeches") populateTable("#speechesTable", results.data);
-        if(name==="Evaluations") populateTable("#evalsTable", results.data);
+      complete: function(res) {
+        SHEETS[name] = res.data;
+        loaded++;
+        if (loaded === entries.length) onAllLoaded();
+      },
+      error: function(err) {
+        console.error("Parse error for", name, err);
       }
     });
   });
 }
 
-function populateMembers(data) {
-  let names = [...new Set(data.map(r=>r.Name).filter(n=>n))];
-  let sel = $("#memberSelect");
-  names.forEach(n=> sel.append(`<option value="${n}">${n}</option>`));
+function onAllLoaded() {
+  populateMemberDropdown();
+  buildRolesSet();       // fills rolesSet and populates roleSelect
+  buildLeaderboard();
+  bindUI();
+  // If you want an initial auto-select (e.g., first member), uncomment:
+  // const first = $("#memberSelect option:eq(1)").val(); $("#memberSelect").val(first).trigger("change");
 }
 
-function populateLeaderboard(data) {
-  populateTable("#leaderboardTable", data);
+/* ----------------- UI BUILDERS ----------------- */
+function populateMemberDropdown() {
+  const total = SHEETS["Total"] || [];
+  const names = [...new Set(total.map(r => r["Name"]).filter(Boolean))].sort();
+  const $sel = $("#memberSelect").empty().append('<option value="">— Select —</option>');
+  names.forEach(n => $sel.append(`<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`));
 }
 
-function populateTable(selector, data) {
-  if(!data || data.length===0) return;
-  let cols = Object.keys(data[0]);
-  let html = "<thead><tr>"+cols.map(c=>`<th>${c}</th>`).join("")+"</tr></thead><tbody>";
-  data.forEach(row=>{
-    html += "<tr>"+cols.map(c=>`<td>${row[c]||""}</td>`).join("")+"</tr>";
+function buildRolesSet() {
+  rolesSet = new Set();
+  // Role Taking + Last Minute Roles values are actual role names
+  ["Role Taking","Last Minute Roles"].forEach(sheet => {
+    (SHEETS[sheet] || []).forEach(row => {
+      const vals = Object.entries(row)
+        .filter(([k]) => k !== "Name" && k !== "Points" && k !== "Date")
+        .map(([,v]) => v).filter(Boolean);
+      vals.forEach(v => rolesSet.add(String(v).trim()));
+    });
   });
-  html += "</tbody>";
-  $(selector).html(html).DataTable();
+  // Additional virtual roles:
+  rolesSet.add("Speaker");
+  rolesSet.add("Evaluator");
+
+  const roles = Array.from(rolesSet).sort((a,b)=>a.localeCompare(b));
+  const $role = $("#roleSelect").empty().append('<option value="">All roles</option>');
+  roles.forEach(r => $role.append(`<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`));
 }
 
-$(document).on("click", ".tab-btn", function(){
-  $(".tab-btn").removeClass("active");
-  $(this).addClass("active");
-  $(".tab-content").removeClass("active");
-  $("#"+$(this).data("tab")).addClass("active");
-});
+function buildLeaderboard() {
+  const summary = SHEETS["Summary"] || [];
+  if (!summary.length) return;
+  const cols = Object.keys(summary[0]);
+  const data = summary.map(r => cols.map(c => r[c] ?? ""));
 
-$(document).ready(loadSheets);
+  $("#leaderboardTable").DataTable({
+    data,
+    columns: cols.map(c => ({ title: c })),
+    destroy:true,
+    pageLength: 25,
+    order: [[1,"desc"]] // assuming column 2 is Points
+  });
+}
+
+/* ----------------- EVENT BINDINGS ----------------- */
+function bindUI() {
+  $(".tablink").on("click", function(){
+    $(".tablink").removeClass("active");
+    $(this).addClass("active");
+    $(".tabcontent").removeClass("active");
+    $("#" + $(this).data("tab")).addClass("active");
+  });
+
+  $("#memberSelect").on("change", () => {
+    const member = $("#memberSelect").val();
+    // Reset role filter when member changes (optional; comment out to keep selection)
+    // $("#roleSelect").val("");
+    if (member) {
+      updateKPIs(member);
+      updateCharts(member);
+      updateDetails(member, $("#roleSelect").val());
+    } else {
+      clearKPIs();
+      clearCharts();
+      clearDetails();
+    }
+  });
+
+  $("#roleSelect, #startDate, #endDate").on("change", () => {
+    const member = $("#memberSelect").val();
+    if (member) updateDetails(member, $("#roleSelect").val());
+  });
+}
+
+/* ----------------- KPIs ----------------- */
+function updateKPIs(member) {
+  // Total Points
+  const totalRow = (SHEETS["Total"] || []).find(r => r["Name"] === member);
+  const totalPoints = toNumber(totalRow?.["Points"]);
+  $("#totalPoints").text(totalPoints);
+
+  // Meetings Counted (Early Attendance): count cols 3+ where value exists and not A/E
+  let mtgs = 0;
+  (SHEETS["Early Attendance"] || []).forEach(r => {
+    if (r["Name"] === member) {
+      Object.entries(r).forEach(([k,v], idx) => {
+        if (k==="Name" || k==="Points" || k==="Date") return;
+        if (v && v !== "A" && v !== "E") mtgs++;
+      });
+    }
+  });
+  $("#meetingsCount").text(mtgs);
+
+  // Distinct Roles across sheets
+  const distinct = calcDistinctRolesForMember(member);
+  $("#distinctRoles").text(distinct.size);
+}
+
+function clearKPIs() {
+  $("#meetingsCount").text(0);
+  $("#totalPoints").text(0);
+  $("#distinctRoles").text(0);
+}
+
+/* ----------------- CHARTS ----------------- */
+function updateCharts(member) {
+  const totalRow = (SHEETS["Total"] || []).find(r => r["Name"] === member);
+  if (!totalRow) { clearCharts(); return; }
+
+  // Category list = all headers except Name & Points
+  const labels = Object.keys(totalRow).filter(k => k !== "Name" && k !== "Points" && k !== "Date");
+  const values = labels.map(k => toNumber(totalRow[k]));
+
+  // Category Breakdown (Pie)
+  if (categoryChart) categoryChart.destroy();
+  categoryChart = new Chart(document.getElementById("categoryChart"), {
+    type: "pie",
+    data: { labels, datasets: [{ data: values }] },
+    options: {
+      plugins: { legend: { position: "bottom" } }
+    }
+  });
+
+  // Cumulative Progress (Line)
+  let cum = 0, cumVals = values.map(v => (cum += v));
+  if (progressChart) progressChart.destroy();
+  progressChart = new Chart(document.getElementById("progressChart"), {
+    type: "line",
+    data: { labels, datasets: [{ label: "Cumulative Points", data: cumVals }] },
+    options: {
+      scales: { y: { beginAtZero: true } },
+      plugins: { legend: { display: false } }
+    }
+  });
+}
+
+function clearCharts() {
+  if (categoryChart) { categoryChart.destroy(); categoryChart = null; }
+  if (progressChart) { progressChart.destroy(); progressChart = null; }
+}
+
+/* ----------------- DETAILS (Member + Role filter) ----------------- */
+function updateDetails(member, roleFilter) {
+  // Build events from Role Taking, Last Minute Roles, Speeches, Evaluations
+  const events = [];
+
+  // Helper to add events from a grid-like sheet
+  function scanGrid(sheetName, mapperFn) {
+    (SHEETS[sheetName] || []).forEach(row => {
+      if (row["Name"] !== member) return;
+      Object.entries(row).forEach(([col, val]) => {
+        if (col==="Name" || col==="Points" || col==="Date") return;
+        if (!val) return;
+        const evt = mapperFn(col, val);
+        if (evt) events.push({ sheet: sheetName, ...evt });
+      });
+    });
+  }
+
+  // Role Taking + Last Minute Roles: cell value is the role name
+  ["Role Taking","Last Minute Roles"].forEach(sn => {
+    scanGrid(sn, (dateCol, val) => ({
+      date: dateCol,       // column header is date label
+      role: String(val).trim(),
+      detail: ""
+    }));
+  });
+
+  // Speeches: any non-empty cell -> role "Speaker", detail = cell content
+  scanGrid("Speeches", (dateCol, val) => ({
+    date: dateCol,
+    role: "Speaker",
+    detail: String(val).trim()
+  }));
+
+  // Evaluations: TRUE -> role "Evaluator"
+  scanGrid("Evaluations", (dateCol, val) => {
+    const isTrue = String(val).toUpperCase() === "TRUE";
+    if (!isTrue) return null;
+    return { date: dateCol, role: "Evaluator", detail: "" };
+  });
+
+  // Optional date filter (if provided)
+  const sd = parseISO($("#startDate").val());
+  const ed = parseISO($("#endDate").val());
+  const filtered = events.filter(e => {
+    if (roleFilter && e.role !== roleFilter) return false;
+    // try parse date header like "12-Jul-25" -> Date
+    let ok = true;
+    if (sd || ed) {
+      const dt = parseDDMonYY(e.date);
+      if (sd && dt && dt < sd) ok = false;
+      if (ed && dt && dt > ed) ok = false;
+    }
+    return ok;
+  });
+
+  // Build DataTable
+  const rows = filtered
+    .sort((a,b) => (parseDDMonYY(a.date) - parseDDMonYY(b.date)))
+    .map(e => [e.date, e.role, e.detail, e.sheet]);
+
+  const cols = [
+    { title: "Meeting (Date Column)" },
+    { title: "Role" },
+    { title: "Detail" },
+    { title: "Source Sheet" }
+  ];
+
+  if (detailDT) { detailDT.clear().destroy(); }
+  $("#detailTable").empty();
+  detailDT = $("#detailTable").DataTable({
+    data: rows,
+    columns: cols,
+    pageLength: 25,
+    order: [[0,"asc"]]
+  });
+}
+
+/* ----------------- HELPERS ----------------- */
+function calcDistinctRolesForMember(member) {
+  const s = new Set();
+  ["Role Taking","Last Minute Roles"].forEach(sn => {
+    (SHEETS[sn] || []).forEach(r => {
+      if (r["Name"] !== member) return;
+      Object.entries(r).forEach(([k,v]) => {
+        if (k==="Name"||k==="Points"||k==="Date") return;
+        if (v) s.add(String(v).trim());
+      });
+    });
+  });
+  // Virtual roles
+  (SHEETS["Speeches"] || []).forEach(r => {
+    if (r["Name"] !== member) return;
+    const any = Object.entries(r).some(([k,v]) => (k!=="Name"&&k!=="Points"&&k!=="Date"&&v));
+    if (any) s.add("Speaker");
+  });
+  (SHEETS["Evaluations"] || []).forEach(r => {
+    if (r["Name"] !== member) return;
+    const anyTrue = Object.entries(r).some(([k,v]) => (k!=="Name"&&k!=="Points"&&k!=="Date"&&String(v).toUpperCase()==="TRUE"));
+    if (anyTrue) s.add("Evaluator");
+  });
+  return s;
+}
+
+function toNumber(x){ const n = Number(String(x).replace(/[, ]/g,'')); return isFinite(n) ? n : 0; }
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function parseISO(s){ if(!s) return null; const d = new Date(s); return isNaN(d) ? null : d; }
+// Parse "12-Jul-25" style date
+function parseDDMonYY(s){
+  if(!s) return null;
+  // Accept e.g., "12-Jul-25" or "12-Jul-2025"
+  const m = String(s).match(/^(\d{1,2})-([A-Za-z]{3})-(\d{2}|\d{4})$/);
+  if(!m) return null;
+  const day = parseInt(m[1],10);
+  const mon = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"].indexOf(m[2]);
+  if (mon<0) return null;
+  let yr = parseInt(m[3],10);
+  if (yr < 100) yr += 2000;
+  const d = new Date(Date.UTC(yr,mon,day));
+  return isNaN(d) ? null : d;
+}
+
+/* ----------------- INIT ----------------- */
+$(function(){
+  loadAllSheets();
+});
 </script>
 </body>
 </html>
