@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Toastmaster of the Year — Member Dashboard</title>
+  <!-- Google Fonts (Montserrat as TM-friendly font) -->
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <!-- PapaParse for CSV parsing -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <style>
+    :root {
+      /* Toastmasters core palette */
+      --tm-blue: #004165;
+      --tm-red: #772432;
+      --tm-yellow: #F2DF74;
+      --tm-grey: #f3f4f6;
+      --card-bg: #ffffff;
+      --text: #0f172a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 0; font-family: Montserrat, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; color: var(--text); background: var(--tm-grey);
+    }
+    header {
+      background: var(--tm-blue); color: white; padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+    }
+    header .title {
+      display: flex; align-items: center; gap: 14px;
+    }
+    header img.logo { height: 56px; object-fit: contain; }
+    header h1 { margin: 0; font-size: 1.25rem; line-height: 1.2; font-weight: 700; }
+    header .subtitle { font-size: .9rem; opacity: .95; font-weight: 600; }
+
+    .container { max-width: 1200px; margin: 20px auto; padding: 0 16px; }
+
+    .card { background: var(--card-bg); border-radius: 16px; padding: 16px; box-shadow: 0 10px 25px rgba(0,0,0,.06); }
+    .grid { display: grid; gap: 16px; }
+    .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    @media (max-width: 980px){ .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+
+    .controls { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; }
+    .control { display: flex; flex-direction: column; gap: 6px; }
+    label { font-weight: 600; font-size: .9rem; }
+    select, input[type="date"], button { padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 10px; font: inherit; }
+    button.primary { background: var(--tm-red); color: #fff; border: none; font-weight: 700; }
+    button.secondary { background: #fff; color: var(--tm-blue); border: 2px solid var(--tm-blue); font-weight: 700; }
+
+    .kpis { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 16px; }
+    @media (max-width: 980px){ .kpis { grid-template-columns: 1fr; } }
+    .kpi { background: var(--card-bg); border-left: 8px solid var(--tm-blue); border-radius: 14px; padding: 16px; box-shadow: 0 8px 22px rgba(0,0,0,.05); }
+    .kpi .label { font-size: .9rem; opacity:.8; }
+    .kpi .value { font-size: 1.8rem; font-weight: 800; margin-top: 6px; }
+
+    .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+    .tab { padding: 8px 12px; border-radius: 999px; border: 2px solid var(--tm-blue); color: var(--tm-blue); background: #fff; cursor: pointer; font-weight: 700; }
+    .tab.active { background: var(--tm-blue); color: #fff; }
+
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid #e5e7eb; font-size: .95rem; }
+    th { background: #fafafa; }
+    .muted { opacity: .7; }
+
+    footer { text-align: center; padding: 36px 16px; color: #6b7280; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="title">
+      <!-- Replace src with the official Toastmasters logo URL (PNG/SVG) -->
+      <img class="logo" id="tmLogo" alt="Toastmasters International" src="https://upload.wikimedia.org/wikipedia/en/0/06/Toastmasters_International_logo.svg">
+      <div>
+        <h1>Toastmaster of the Year — Member Dashboard</h1>
+        <div class="subtitle">Interactive scores, category breakdowns, and per‑meeting details</div>
+      </div>
+    </div>
+    <!-- Replace with your club logo URL -->
+    <img class="logo" id="clubLogo" alt="Club Logo" src="https://dummyimage.com/160x56/004165/ffffff&text=Your+Club+Logo"/>
+  </header>
+
+  <div class="container">
+    <div class="card" style="margin-bottom:16px">
+      <div class="controls">
+        <div class="control">
+          <label for="memberSelect">Select member</label>
+          <select id="memberSelect"></select>
+        </div>
+        <div class="control">
+          <label for="roleFilter">Filter by role (optional)</label>
+          <select id="roleFilter"><option value="">All roles</option></select>
+        </div>
+        <div class="control">
+          <label for="startDate">Start date</label>
+          <input type="date" id="startDate"/>
+        </div>
+        <div class="control">
+          <label for="endDate">End date</label>
+          <input type="date" id="endDate"/>
+        </div>
+        <div class="control" style="gap:8px; flex-direction: row; margin-left:auto;">
+          <button class="primary" id="applyFilters">Apply filters</button>
+          <button class="secondary" id="resetFilters">Reset</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="kpis">
+      <div class="kpi"><div class="label">Total Points</div><div class="value" id="kpiTotal">—</div></div>
+      <div class="kpi"><div class="label">Meetings Counted</div><div class="value" id="kpiMeetings">—</div></div>
+      <div class="kpi"><div class="label">Distinct Roles</div><div class="value" id="kpiRoles">—</div></div>
+    </div>
+
+    <div class="grid grid-2" style="margin-top:16px">
+      <div class="card">
+        <h3 style="margin:0 0 8px 0">Category Breakdown</h3>
+        <canvas id="categoryChart" height="200"></canvas>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 8px 0">Cumulative Progress</h3>
+        <canvas id="progressChart" height="200"></canvas>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <h3 style="margin:0 0 8px 0">Per-Meeting Details</h3>
+      <div class="tabs" id="detailTabs">
+        <button class="tab active" data-sheet="Role Taking">Roles</button>
+        <button class="tab" data-sheet="Speeches">Speeches</button>
+        <button class="tab" data-sheet="Evaluations">Evaluations</button>
+        <button class="tab" data-sheet="Table Topics">Table Topics</button>
+        <button class="tab" data-sheet="Early Attendance">Early Attendance</button>
+        <!-- Add more tabs easily by sheet name in Google Sheets -->
+      </div>
+      <div style="margin-top:8px; overflow:auto">
+        <table>
+          <thead>
+            <tr><th style="width:40%">Meeting Date</th><th>Item / Role / Notes</th><th class="muted">Points</th></tr>
+          </thead>
+          <tbody id="detailBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <h3 style="margin:0 0 8px 0">Leaderboard (Club)</h3>
+      <canvas id="leaderboardChart" height="120"></canvas>
+    </div>
+  </div>
+
+  <footer>
+    Built with ❤️ for Toastmasters. Colors & layout follow TI brand guidelines.
+  </footer>
+
+  <script>
+    // =====================
+    //  CONFIGURATION
+    // =====================
+    const SHEET_ID = "19x7OzxLlfG5YarEgksoX-drLaf12Ci98JpYkBvQpoMI"; // <-- your Google Sheet ID
+    // We will pull specific sheets by name using the gviz CSV endpoint
+    const SHEETS = {
+      SUMMARY: "Summary",
+      TOTAL: "Total",
+      ROLES: "Role Taking",
+      SPEECHES: "Speeches",
+      EVALUATIONS: "Evaluations",
+      TABLE_TOPICS: "Table Topics",
+      EARLY: "Early Attendance"
+      // Add more names matching your Google Sheet tabs if needed
+    };
+
+    // Helper to build a CSV export URL by sheet name
+    const csvUrl = (sheetName) => `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
+
+    // Toastmasters color set for charts
+    const tmColors = {
+      blue: "#004165",
+      red: "#772432",
+      yellow: "#F2DF74",
+      teal: "#2BB3B1",
+      navy: "#00263A",
+    };
+
+    // Global state
+    let summary = [];   // [{Name, Points}]
+    let total = [];     // [{Name, Points, <Category1>, <Category2>, ...}]
+    let roles = [];     // wide format per meeting date columns
+    let speeches = [];  // wide
+    let evaluations = [];
+    let tableTopics = [];
+    let early = [];
+
+    // Charts refs
+    let categoryChart, progressChart, leaderboardChart;
+
+    // ==================================
+    //  DATA FETCHING & NORMALIZATION
+    // ==================================
+    function fetchSheet(sheetName){
+      return new Promise((resolve, reject) => {
+        Papa.parse(csvUrl(sheetName), {
+          download: true,
+          header: true,
+          skipEmptyLines: true,
+          complete: (res) => resolve(res.data),
+          error: reject,
+        });
+      });
+    }
+
+    // Convert a wide meeting sheet (Role Taking / Speeches / Evaluations / etc.)
+    // into long rows: { Name, MeetingDate, Value, Points }
+    function meltMeetingSheet(rows){
+      if(!rows || rows.length === 0) return [];
+      // Identify date-like columns (everything except Name/Points)
+      const dateCols = Object.keys(rows[0]).filter(k => !["Name","Points","Member"].includes(k));
+      const out = [];
+      for(const r of rows){
+        const name = r.Name || r.Member;
+        if(!name) continue; // ignore non-name rows
+        const basePts = parseFloat(r.Points || 0) || 0;
+        for(const col of dateCols){
+          const raw = r[col];
+          if(raw === undefined || raw === null || String(raw).trim() === "") continue;
+          // normalize date label
+          const dateLabel = normalizeDateLabel(col);
+          out.push({ Name: name, MeetingDate: dateLabel, Value: String(raw).trim(), Points: basePts });
+        }
+      }
+      return out;
+    }
+
+    function normalizeDateLabel(label){
+      // Input can be like "2025-07-12 00:00:00" or already a date string.
+      const d = new Date(label);
+      if(!isNaN(d.getTime())){
+        // Format as ISO YYYY-MM-DD
+        return d.toISOString().slice(0,10);
+      }
+      // fallback to original
+      return label;
+    }
+
+    // Get unique, sorted meeting dates from multiple long-form sheets
+    function collectAllMeetings(...longSheets){
+      const set = new Set();
+      for(const arr of longSheets){
+        for(const r of arr){ set.add(r.MeetingDate); }
+      }
+      return Array.from(set).filter(Boolean).sort();
+    }
+
+    // Sum points per date for a member (cumulative progress)
+    function buildCumulativeForMember(member, longSheets){
+      const perDate = {};
+      for(const arr of longSheets){
+        for(const r of arr){
+          if(r.Name !== member) continue;
+          perDate[r.MeetingDate] = (perDate[r.MeetingDate] || 0) + (parseFloat(r.Points||0)||0);
+        }
+      }
+      const dates = Object.keys(perDate).sort();
+      let cum = 0; const y = [];
+      for(const dt of dates){ cum += perDate[dt]; y.push({date: dt, value: cum}); }
+      return y;
+    }
+
+    // Extract category totals for a member from the Total sheet
+    function categoryTotalsForMember(member){
+      const row = total.find(r => (r.Name||"").trim() === member.trim());
+      if(!row) return {};
+      const out = {};
+      for(const [k,v] of Object.entries(row)){
+        if(["Name","Points"].includes(k)) continue;
+        if(String(k).toLowerCase().includes("unnamed")) continue; // ignore filler columns
+        const num = parseFloat(v||0) || 0;
+        out[k] = num;
+      }
+      return out;
+    }
+
+    // ==================================
+    //  UI BINDINGS
+    // ==================================
+    function fillMemberSelect(){
+      const sel = document.getElementById('memberSelect');
+      sel.innerHTML = '';
+      const names = summary.map(r => r.Name).filter(Boolean);
+      for(const n of names){
+        const opt = document.createElement('option');
+        opt.value = n; opt.textContent = n; sel.appendChild(opt);
+      }
+      if(names.length){ sel.value = names[0]; }
+    }
+
+    function fillRoleFilter(){
+      const sel = document.getElementById('roleFilter');
+      // collect roles from Role Taking sheet values
+      const longRoles = meltMeetingSheet(roles);
+      const set = new Set();
+      for(const r of longRoles){ set.add(r.Value); }
+      for(const v of Array.from(set).filter(Boolean).sort()){
+        const opt = document.createElement('option');
+        opt.value = v; opt.textContent = v; sel.appendChild(opt);
+      }
+    }
+
+    function kpi(text){ return new Intl.NumberFormat().format(text||0); }
+
+    function updateKpis(member){
+      const totalPts = (summary.find(r => (r.Name||'') === member) || {}).Points || 0;
+      document.getElementById('kpiTotal').textContent = kpi(totalPts);
+
+      // meetings counted = distinct meetings where member has any entry across sheets
+      const longRoles = meltMeetingSheet(roles);
+      const longSpeeches = meltMeetingSheet(speeches);
+      const longEvals = meltMeetingSheet(evaluations);
+      const longTT = meltMeetingSheet(tableTopics);
+      const longEarly = meltMeetingSheet(early);
+      const meetings = new Set();
+      for(const arr of [longRoles,longSpeeches,longEvals,longTT,longEarly]){
+        for(const r of arr){ if(r.Name===member) meetings.add(r.MeetingDate); }
+      }
+      document.getElementById('kpiMeetings').textContent = meetings.size;
+
+      // distinct roles for member
+      const roleSet = new Set();
+      for(const r of longRoles){ if(r.Name===member) roleSet.add(r.Value); }
+      document.getElementById('kpiRoles').textContent = roleSet.size;
+    }
+
+    // Charts
+    function renderCategoryChart(member){
+      const dataObj = categoryTotalsForMember(member);
+      const labels = Object.keys(dataObj);
+      const values = Object.values(dataObj);
+
+      if(categoryChart) categoryChart.destroy();
+      categoryChart = new Chart(document.getElementById('categoryChart'), {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Points by Category',
+            data: values,
+            backgroundColor: tmColors.blue,
+          }]
+        },
+        options: {
+          responsive: true,
+          scales: { y: { beginAtZero: true } },
+          plugins: { legend: { display:false } }
+        }
+      });
+    }
+
+    function renderProgressChart(member){
+      const longRoles = meltMeetingSheet(roles);
+      const longSpeeches = meltMeetingSheet(speeches);
+      const longEvals = meltMeetingSheet(evaluations);
+      const longTT = meltMeetingSheet(tableTopics);
+      const longEarly = meltMeetingSheet(early);
+      const cum = buildCumulativeForMember(member, [longRoles,longSpeeches,longEvals,longTT,longEarly]);
+
+      if(progressChart) progressChart.destroy();
+      progressChart = new Chart(document.getElementById('progressChart'), {
+        type: 'line',
+        data: {
+          labels: cum.map(d=>d.date),
+          datasets: [{
+            label: 'Cumulative Points',
+            data: cum.map(d=>d.value),
+            borderColor: tmColors.red,
+            tension: .2
+          }]
+        },
+        options: { responsive: true, scales: { y: { beginAtZero: true } } }
+      });
+    }
+
+    function renderLeaderboard(){
+      const labels = summary.map(r => r.Name);
+      const values = summary.map(r => parseFloat(r.Points||0)||0);
+      if(leaderboardChart) leaderboardChart.destroy();
+      leaderboardChart = new Chart(document.getElementById('leaderboardChart'), {
+        type: 'bar',
+        data: { labels, datasets: [{ label: 'Total Points', data: values, backgroundColor: tmColors.yellow }]},
+        options: { responsive: true, plugins: { legend: { display:false } }, scales: { y: { beginAtZero: true } } }
+      });
+    }
+
+    // Detail table (per-sheet)
+    function renderDetailTable(activeSheetName){
+      const member = document.getElementById('memberSelect').value;
+      const roleFilterVal = document.getElementById('roleFilter').value;
+      const start = document.getElementById('startDate').value;
+      const end = document.getElementById('endDate').value;
+
+      let src = [];
+      switch(activeSheetName){
+        case SHEETS.ROLES: src = meltMeetingSheet(roles); break;
+        case SHEETS.SPEECHES: src = meltMeetingSheet(speeches); break;
+        case SHEETS.EVALUATIONS: src = meltMeetingSheet(evaluations); break;
+        case SHEETS.TABLE_TOPICS: src = meltMeetingSheet(tableTopics); break;
+        case SHEETS.EARLY: src = meltMeetingSheet(early); break;
+        default: src = []; break;
+      }
+
+      const withinDate = (d) => {
+        const x = new Date(d);
+        const okStart = !start || x >= new Date(start);
+        const okEnd = !end || x <= new Date(end);
+        return okStart && okEnd;
+      };
+
+      let rows = src.filter(r => r.Name===member && withinDate(r.MeetingDate));
+      if(activeSheetName === SHEETS.ROLES && roleFilterVal){
+        rows = rows.filter(r => r.Value === roleFilterVal);
+      }
+
+      rows.sort((a,b) => new Date(a.MeetingDate) - new Date(b.MeetingDate));
+
+      const tbody = document.getElementById('detailBody');
+      tbody.innerHTML = '';
+      if(rows.length === 0){
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td colspan="3" class="muted">No entries for the selected filters.</td>`;
+        tbody.appendChild(tr);
+        return;
+      }
+
+      for(const r of rows){
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${r.MeetingDate}</td><td>${r.Value}</td><td class="muted">${r.Points||''}</td>`;
+        tbody.appendChild(tr);
+      }
+    }
+
+    function bindTabs(){
+      const tabs = document.querySelectorAll('#detailTabs .tab');
+      tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+          tabs.forEach(t => t.classList.remove('active'));
+          tab.classList.add('active');
+          renderDetailTable(tab.dataset.sheet);
+        });
+      });
+    }
+
+    function applyFilters(){
+      const member = document.getElementById('memberSelect').value;
+      updateKpis(member);
+      renderCategoryChart(member);
+      renderProgressChart(member);
+      // active tab
+      const active = document.querySelector('#detailTabs .tab.active');
+      if(active) renderDetailTable(active.dataset.sheet);
+    }
+
+    function resetFilters(){
+      document.getElementById('roleFilter').value = '';
+      document.getElementById('startDate').value = '';
+      document.getElementById('endDate').value = '';
+      applyFilters();
+    }
+
+    // ==================================
+    //  INIT
+    // ==================================
+    async function init(){
+      // Load all needed sheets in parallel
+      const [sum, tot, rol, sp, ev, tt, ea] = await Promise.all([
+        fetchSheet(SHEETS.SUMMARY),
+        fetchSheet(SHEETS.TOTAL),
+        fetchSheet(SHEETS.ROLES),
+        fetchSheet(SHEETS.SPEECHES),
+        fetchSheet(SHEETS.EVALUATIONS),
+        fetchSheet(SHEETS.TABLE_TOPICS),
+        fetchSheet(SHEETS.EARLY),
+      ]);
+
+      // Normalize numeric points
+      summary = (sum||[]).filter(r => r.Name).map(r => ({ Name: r.Name, Points: Number(r.Points||0) }));
+      total = (tot||[]).filter(r => r.Name);
+      roles = rol||[]; speeches = sp||[]; evaluations = ev||[]; tableTopics = tt||[]; early = ea||[];
+
+      // UI
+      fillMemberSelect();
+      fillRoleFilter();
+      bindTabs();
+      renderLeaderboard();
+
+      // Events
+      document.getElementById('memberSelect').addEventListener('change', applyFilters);
+      document.getElementById('applyFilters').addEventListener('click', applyFilters);
+      document.getElementById('resetFilters').addEventListener('click', resetFilters);
+
+      // Initial render
+      applyFilters();
+    }
+
+    init().catch(err => {
+      console.error(err);
+      alert('Failed to load data. Please check your Google Sheet sharing settings and sheet names.');
+    });
+  </script>
+</body>
+</html>
