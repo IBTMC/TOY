@@ -30,6 +30,11 @@
   header h1{font-size:20px; margin:0; font-weight:700}
   .container{max-width:1220px; margin:24px auto; padding:0 16px}
 
+  .topbar {display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between}
+  .mode-toggle{display:flex; align-items:center; gap:8px; background:var(--card); padding:10px 12px; border-radius:12px; box-shadow:0 6px 18px rgba(0,0,0,.06)}
+  .mode-toggle button{border:none; padding:8px 12px; border-radius:10px; cursor:pointer; font-weight:700}
+  .mode-toggle .active{background:var(--tm-red); color:#fff}
+
   .filters, .kpis, .charts, .cards, .tabs {margin-top:18px}
   .panel{
     background:var(--card); border-radius:14px; padding:14px;
@@ -76,6 +81,14 @@
 </header>
 
 <div class="container">
+
+  <div class="topbar">
+    <div class="mode-toggle">
+      <span style="font-weight:700;">Display Mode:</span>
+      <button id="modeAll" class="active">All Members</button>
+      <button id="modeMember">Member Only</button>
+    </div>
+  </div>
 
   <!-- Filters -->
   <div class="filters panel">
@@ -155,7 +168,8 @@
       <button class="tab-btn" data-sheet="Evaluations">Evaluations</button>
       <button class="tab-btn" data-sheet="Level Completions">Level Completions</button>
       <button class="tab-btn" data-sheet="Awards">Awards</button>
-      <button class="tab-btn" data-sheet="External">External</button>
+      <button class="tab-btn" data-sheet="ExCom & Sub.">ExCom & Sub.</button>
+      <button class="tab-btn" data-sheet="Early Attendance">Early Attendance</button>
       <button class="tab-btn" data-sheet="Other">Other</button>
       <button class="tab-btn" data-sheet="Last Minute Roles">Last Minute Roles</button>
     </div>
@@ -166,20 +180,21 @@
 </div>
 
 <script>
+/** === CONFIG === **/
 const SHEET_ID = "19x7OzxLlfG5YarEgksoX-drLaf12Ci98JpYkBvQpoMI";
-const DETAIL_TABS = ["Role Taking","Speeches","Evaluations","Level Completions","Awards","External","Other","Last Minute Roles"];
 const CATEGORY_KEYS = ["Early Attendance","Role Taking","Speeches","Evaluations","Level Completions","Awards","ExCom & Sub.","Contests","External","Other","Last Minute Roles"];
+const DETAIL_TABS = ["Role Taking","Speeches","Evaluations","Level Completions","Awards","ExCom & Sub.","Early Attendance","Other","Last Minute Roles"];
 
-let cache = {}; // per-sheet cache
+/** cache per sheet to minimize calls */
+let cache = {};
+let currentMode = "ALL"; // "ALL" or "MEMBER"
 
-// ---------------- GViz fetch ----------------
+/** ===== GViz fetch ==== **/
 async function fetchGViz(sheetName){
   if(cache[sheetName]) return cache[sheetName];
-  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?sheet=${encodeURIComponent(sheetName)}&tq=select%20*`;
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}&tq=select%20*`;
   const res = await fetch(url);
   const txt = await res.text();
-
-  // Extract JSON
   const m = txt.match(/google\.visualization\.Query\.setResponse\(([\s\S]*?)\);/);
   if(!m){ showError(`Failed to parse GViz for "${sheetName}".`); return []; }
   const json = JSON.parse(m[1]);
@@ -197,16 +212,10 @@ async function fetchGViz(sheetName){
   return rows;
 }
 
-function showError(msg){
-  const box = document.getElementById('errorBox');
-  box.textContent = msg;
-  box.classList.remove('hidden');
-}
-function clearError(){
-  document.getElementById('errorBox').classList.add('hidden');
-}
+/** ===== helpers ===== **/
+function showError(msg){ const box = document.getElementById('errorBox'); box.textContent = msg; box.classList.remove('hidden'); }
+function clearError(){ document.getElementById('errorBox').classList.add('hidden'); }
 
-// ---------------- helpers ----------------
 function parseHeaderDate(label){
   const d1 = new Date(label);
   if(!isNaN(d1)) return d1;
@@ -225,126 +234,139 @@ function inRange(date, start, end){
   if(end && date > end) return false;
   return true;
 }
-function toLabel(d){ return d.toISOString().slice(0,10); }
-
+function toISO(d){ return d.toISOString().slice(0,10); }
 function cleanedRows(rows){
-  // Drop row 2 (meeting number row) whose Name is empty
+  // Drop the second header row (meeting # row) where Name is blank
   return rows.filter(r => r.Name && String(r.Name).trim() !== "");
 }
-
-function dateColumnsFrom(sheetRows){
-  const sample = sheetRows[0] || {};
+function dateColumnsFrom(rows){
+  const sample = rows[0] || {};
   return Object.keys(sample).filter(k => k!=="Name" && k!=="Points" && parseHeaderDate(k));
 }
 
-// ---------------- populate UI ----------------
+/** ===== UI population ===== **/
 async function populateMembers(){
   const total = await fetchGViz("Total");
   const members = total.map(r=>r.Name).filter(Boolean);
   const sel = document.getElementById('memberSelect');
-  sel.innerHTML = members.map(m=>`<option value="${m}">${m}</option>`).join('');
+  sel.innerHTML = `<option value="">— Select —</option>` + members.map(m=>`<option value="${m}">${m}</option>`).join('');
 }
 
 async function populateRoleFilter(){
-  const set = new Set();
-  // Roles from Role Taking (cell values, rows >= 3)
-  const roleRows = cleanedRows(await fetchGViz("Role Taking"));
-  roleRows.forEach(row=>{
+  const roleSet = new Set();
+
+  // Roles from Role Taking (rows >= 3)
+  const rtRows = cleanedRows(await fetchGViz("Role Taking"));
+  rtRows.forEach(row=>{
     Object.entries(row).forEach(([k,v])=>{
       if(k==="Name"||k==="Points") return;
-      if(v && String(v).trim()) set.add(String(v).trim());
+      if(v && String(v).trim()) roleSet.add(String(v).trim());
     });
   });
 
-  // "Speaker" if any non-empty in Speeches
-  const speechRows = cleanedRows(await fetchGViz("Speeches"));
+  // Speaker if any non-empty cell in Speeches
+  const spRows = cleanedRows(await fetchGViz("Speeches"));
   let hasSpeaker=false;
-  speechRows.forEach(row=>{
+  spRows.forEach(row=>{
     Object.entries(row).forEach(([k,v])=>{
       if(k==="Name"||k==="Points") return;
       if(v && String(v).trim()) hasSpeaker=true;
     });
   });
-  if(hasSpeaker) set.add("Speaker");
+  if(hasSpeaker) roleSet.add("Speaker");
 
-  // "Evaluator" if any TRUE in Evaluations
-  const evalRows = cleanedRows(await fetchGViz("Evaluations"));
+  // Evaluator if any TRUE in Evaluations
+  const evRows = cleanedRows(await fetchGViz("Evaluations"));
   let hasEvaluator=false;
-  evalRows.forEach(row=>{
+  evRows.forEach(row=>{
     Object.entries(row).forEach(([k,v])=>{
       if(k==="Name"||k==="Points") return;
-      const val = (typeof v === 'string') ? v.trim().toUpperCase() : v;
+      const val=(typeof v==='string')?v.trim().toUpperCase():v;
       if(val===true || val==="TRUE") hasEvaluator=true;
     });
   });
-  if(hasEvaluator) set.add("Evaluator");
+  if(hasEvaluator) roleSet.add("Evaluator");
 
   const sel = document.getElementById('roleFilter');
-  sel.innerHTML = `<option value="__ALL__">All roles</option>` + [...set].sort().map(r=>`<option>${r}</option>`).join('');
+  sel.innerHTML = `<option value="__ALL__">All roles</option>` + [...roleSet].sort().map(r=>`<option value="${r}">${r}</option>`).join('');
 }
 
-// ---------------- KPIs ----------------
+/** ===== KPIs ===== **/
 async function updateKPIs(member, start, end, roleFilter){
-  // meetings counted = distinct date columns in Role Taking that fall within range
-  const roleRows = await fetchGViz("Role Taking");
-  const headers = dateColumnsFrom(roleRows);
-  const meetings = headers.map(parseHeaderDate).filter(Boolean).filter(d=>inRange(d,start,end)).length;
+  // Meetings Counted: number of date columns in Role Taking within range
+  const rt = await fetchGViz("Role Taking");
+  const headers = dateColumnsFrom(rt).map(parseHeaderDate).filter(Boolean);
+  const meetings = headers.filter(d=>inRange(d,start,end)).length;
   document.getElementById('kpiMeetings').textContent = meetings || 0;
 
-  // total points from Total
+  // Total Points: from Total (member) or sum all (aggregate)
   const total = await fetchGViz("Total");
-  const row = total.find(r=>r.Name===member);
-  const points = row && row.Points ? Number(row.Points) : 0;
+  let points = 0;
+  if(member){
+    const row = total.find(r=>r.Name===member);
+    points = row && row.Points ? Number(row.Points) : 0;
+  }else{
+    points = total.reduce((s,r)=> s + Number(r.Points||0), 0);
+  }
   document.getElementById('kpiPoints').textContent = points;
 
-  // distinct roles for member, within filters
-  const memberRoleRow = cleanedRows(await fetchGViz("Role Taking")).find(r=>r.Name===member) || {};
+  // Distinct Roles: unique set for member (or across all members in ALL mode)
   const distinct = new Set();
 
-  Object.entries(memberRoleRow).forEach(([k,v])=>{
-    if(k==="Name"||k==="Points") return;
-    const d = parseHeaderDate(k);
-    if(!d) return;
-    if(!inRange(d,start,end)) return;
-    const val = String(v||"").trim();
-    if(!val) return;
-    if(roleFilter && roleFilter!=="__ALL__" && roleFilter!=="Speaker" && roleFilter!=="Evaluator" && val!==roleFilter) return;
-    distinct.add(val);
+  // Role Taking roles
+  const rtRows = cleanedRows(await fetchGViz("Role Taking"));
+  (member ? rtRows.filter(r=>r.Name===member) : rtRows).forEach(row=>{
+    Object.entries(row).forEach(([k,v])=>{
+      if(k==="Name"||k==="Points") return;
+      const d = parseHeaderDate(k); if(!d) return;
+      if(!inRange(d,start,end)) return;
+      const val = String(v||"").trim(); if(!val) return;
+      if(roleFilter && roleFilter!=="__ALL__" && roleFilter!=="Speaker" && roleFilter!=="Evaluator" && val!==roleFilter) return;
+      distinct.add(val);
+    });
   });
 
-  // include Speaker/Evaluator if filtering or present in range
-  if(roleFilter==="Speaker" || roleFilter==="__ALL__"){
-    const speeches = cleanedRows(await fetchGViz("Speeches")).find(r=>r.Name===member) || {};
-    let spoke=false;
-    Object.entries(speeches).forEach(([k,v])=>{
+  // Speaker
+  const spRows = cleanedRows(await fetchGViz("Speeches"));
+  (member ? spRows.filter(r=>r.Name===member) : spRows).forEach(row=>{
+    Object.entries(row).forEach(([k,v])=>{
       if(k==="Name"||k==="Points") return;
       const d=parseHeaderDate(k); if(!d) return;
       if(!inRange(d,start,end)) return;
-      if(v && String(v).trim()) spoke=true;
+      if(!(v && String(v).trim())) return;
+      if(roleFilter && roleFilter!=="__ALL__" && roleFilter!=="Speaker") return;
+      distinct.add("Speaker");
     });
-    if(spoke) distinct.add("Speaker");
-  }
-  if(roleFilter==="Evaluator" || roleFilter==="__ALL__"){
-    const evals = cleanedRows(await fetchGViz("Evaluations")).find(r=>r.Name===member) || {};
-    let evaled=false;
-    Object.entries(evals).forEach(([k,v])=>{
+  });
+
+  // Evaluator
+  const evRows = cleanedRows(await fetchGViz("Evaluations"));
+  (member ? evRows.filter(r=>r.Name===member) : evRows).forEach(row=>{
+    Object.entries(row).forEach(([k,v])=>{
       if(k==="Name"||k==="Points") return;
       const d=parseHeaderDate(k); if(!d) return;
       if(!inRange(d,start,end)) return;
       const val=(typeof v==='string')?v.trim().toUpperCase():v;
-      if(val===true || val==="TRUE") evaled=true;
+      const isTrue=(val===true || val==="TRUE");
+      if(!isTrue) return;
+      if(roleFilter && roleFilter!=="__ALL__" && roleFilter!=="Evaluator") return;
+      distinct.add("Evaluator");
     });
-    if(evaled) distinct.add("Evaluator");
-  }
+  });
 
   document.getElementById('kpiRoles').textContent = distinct.size;
 }
 
-// ---------------- Leaderboard ----------------
+/** ===== Leaderboard (Summary preferred) ===== **/
 async function buildLeaderboard(){
-  const total = await fetchGViz("Total");
-  const data = total.filter(r=>r.Name).map(r=>({Name:r.Name, Points:Number(r.Points||0)}));
-  data.sort((a,b)=>b.Points-a.Points);
+  // Prefer Summary (already top scores), fallback to Total
+  let rows = await fetchGViz("Summary");
+  if(!rows || !rows.length) rows = await fetchGViz("Total");
+
+  const data = rows
+    .filter(r=>r.Name)
+    .map(r=>({ Name:r.Name, Points:Number(r.Points||0) }))
+    .sort((a,b)=>b.Points-a.Points);
 
   if ($.fn.DataTable.isDataTable("#leaderboardTable")) {
     $("#leaderboardTable").DataTable().clear().rows.add(data).draw();
@@ -357,9 +379,9 @@ async function buildLeaderboard(){
   }
 }
 
-// ---------------- Raw table tab ----------------
+/** ===== Raw table tab ===== **/
 async function loadDetailTable(sheetName, member){
-  const rows = cleanedRows(await fetchGViz(sheetName));
+  const rows = sheetName === "Total" ? await fetchGViz("Total") : cleanedRows(await fetchGViz(sheetName));
   const filtered = member ? rows.filter(r=>r.Name===member) : rows;
 
   if ($.fn.DataTable.isDataTable("#detailTable")) {
@@ -367,33 +389,42 @@ async function loadDetailTable(sheetName, member){
     $("#detailTable").empty();
   }
   if (!filtered.length){ return; }
+
+  // Preserve column order from first row keys
+  const cols = Object.keys(filtered[0]).map(c=>({title:c,data:c}));
   $("#detailTable").DataTable({
     data: filtered,
-    columns: Object.keys(filtered[0]).map(c=>({title:c,data:c})),
+    columns: cols,
     pageLength: 10
   });
 }
 
-// ---------------- Charts ----------------
-const CATEGORY_KEYS = ["Early Attendance","Role Taking","Speeches","Evaluations","Level Completions","Awards","ExCom & Sub.","Contests","External","Other","Last Minute Roles"];
+/** ===== Charts ===== **/
 let categoryChart, roleChart, cumulativeChart;
 
-function pickCategories(totalRow){
-  const items=[];
-  CATEGORY_KEYS.forEach(k=>{
-    if(k in totalRow){
-      items.push({label:k, value:Number(totalRow[k]||0)});
-    }
-  });
-  return items;
+function resetChart(chart){ if(chart){ chart.destroy(); } }
+
+function categoryItemsFromTotal(totalRows, member){
+  // Build {label, value} from CATEGORY_KEYS
+  if(member){
+    const r = totalRows.find(x=>x.Name===member) || {};
+    return CATEGORY_KEYS.filter(k=>k in r).map(k=>({label:k, value:Number(r[k]||0)}));
+  }else{
+    // aggregate across all
+    const sums = {};
+    CATEGORY_KEYS.forEach(k=>sums[k]=0);
+    totalRows.forEach(r=>{
+      CATEGORY_KEYS.forEach(k=>{ if(k in r) sums[k]+=Number(r[k]||0); });
+    });
+    return CATEGORY_KEYS.map(k=>({label:k, value:sums[k]}));
+  }
 }
 
 async function drawCategoryChart(member){
   const total = await fetchGViz("Total");
-  const row = total.find(r=>r.Name===member) || {};
-  const items = pickCategories(row);
+  const items = categoryItemsFromTotal(total, member);
   const ctx = document.getElementById('categoryChart').getContext('2d');
-  if (categoryChart) categoryChart.destroy();
+  resetChart(categoryChart);
   categoryChart = new Chart(ctx, {
     type:"bar",
     data:{ labels: items.map(i=>i.label), datasets:[{label:"Points", data: items.map(i=>i.value)}] },
@@ -401,50 +432,54 @@ async function drawCategoryChart(member){
   });
 }
 
-// Role Breakdown Pie — respects date & role filters
+// Role Breakdown Pie
 async function drawRoleChart(member, start, end, roleFilter){
   const counts={};
 
-  // Role Taking specific roles
-  const roleRow = cleanedRows(await fetchGViz("Role Taking")).find(r=>r.Name===member) || {};
-  Object.entries(roleRow).forEach(([k,v])=>{
-    if(k==="Name"||k==="Points") return;
-    const d=parseHeaderDate(k); if(!d) return;
-    if(!inRange(d,start,end)) return;
-    const val=String(v||"").trim(); if(!val) return;
-    if(roleFilter && roleFilter!=="__ALL__" && roleFilter!=="Speaker" && roleFilter!=="Evaluator" && val!==roleFilter) return;
-    counts[val]=(counts[val]||0)+1;
+  function addCount(role){ counts[role]=(counts[role]||0)+1; }
+
+  // Role Taking
+  const rtRows = cleanedRows(await fetchGViz("Role Taking"));
+  (member ? rtRows.filter(r=>r.Name===member) : rtRows).forEach(row=>{
+    Object.entries(row).forEach(([k,v])=>{
+      if(k==="Name"||k==="Points") return;
+      const d=parseHeaderDate(k); if(!d) return;
+      if(!inRange(d,start,end)) return;
+      const val=String(v||"").trim(); if(!val) return;
+      if(roleFilter && roleFilter!=="__ALL__" && roleFilter!=="Speaker" && roleFilter!=="Evaluator" && val!==roleFilter) return;
+      addCount(val);
+    });
   });
 
   // Speaker
-  const speechRow = cleanedRows(await fetchGViz("Speeches")).find(r=>r.Name===member) || {};
-  let speakerCount=0;
-  Object.entries(speechRow).forEach(([k,v])=>{
-    if(k==="Name"||k==="Points") return;
-    const d=parseHeaderDate(k); if(!d) return;
-    if(!inRange(d,start,end)) return;
-    if(v && String(v).trim()) speakerCount++;
+  const spRows = cleanedRows(await fetchGViz("Speeches"));
+  (member ? spRows.filter(r=>r.Name===member) : spRows).forEach(row=>{
+    Object.entries(row).forEach(([k,v])=>{
+      if(k==="Name"||k==="Points") return;
+      const d=parseHeaderDate(k); if(!d) return;
+      if(!inRange(d,start,end)) return;
+      if(!(v && String(v).trim())) return;
+      if(roleFilter && roleFilter!=="__ALL__" && roleFilter!=="Speaker") return;
+      addCount("Speaker");
+    });
   });
-  if(speakerCount && (!roleFilter || roleFilter==="__ALL__" || roleFilter==="Speaker")) {
-    counts["Speaker"]=(counts["Speaker"]||0)+speakerCount;
-  }
 
   // Evaluator
-  const evalRow = cleanedRows(await fetchGViz("Evaluations")).find(r=>r.Name===member) || {};
-  let evaluatorCount=0;
-  Object.entries(evalRow).forEach(([k,v])=>{
-    if(k==="Name"||k==="Points") return;
-    const d=parseHeaderDate(k); if(!d) return;
-    if(!inRange(d,start,end)) return;
-    const val=(typeof v==='string')?v.trim().toUpperCase():v;
-    if(val===true || val==="TRUE") evaluatorCount++;
+  const evRows = cleanedRows(await fetchGViz("Evaluations"));
+  (member ? evRows.filter(r=>r.Name===member) : evRows).forEach(row=>{
+    Object.entries(row).forEach(([k,v])=>{
+      if(k==="Name"||k==="Points") return;
+      const d=parseHeaderDate(k); if(!d) return;
+      if(!inRange(d,start,end)) return;
+      const val=(typeof v==='string')?v.trim().toUpperCase():v;
+      if(!(val===true || val==="TRUE")) return;
+      if(roleFilter && roleFilter!=="__ALL__" && roleFilter!=="Evaluator") return;
+      addCount("Evaluator");
+    });
   });
-  if(evaluatorCount && (!roleFilter || roleFilter==="__ALL__" || roleFilter==="Evaluator")) {
-    counts["Evaluator"]=(counts["Evaluator"]||0)+evaluatorCount;
-  }
 
   const ctx = document.getElementById('roleChart').getContext('2d');
-  if (roleChart) roleChart.destroy();
+  resetChart(roleChart);
   roleChart = new Chart(ctx, {
     type:"pie",
     data:{ labels:Object.keys(counts), datasets:[{ data:Object.values(counts) }] },
@@ -452,55 +487,64 @@ async function drawRoleChart(member, start, end, roleFilter){
   });
 }
 
-// Cumulative Progress — activity units over time
+// Cumulative Progress (activity units over time)
 async function drawCumulative(member, start, end, roleFilter){
   const buckets={}; // dateLabel -> count
 
-  // Role Taking (specific roles)
-  const roleRow = cleanedRows(await fetchGViz("Role Taking")).find(r=>r.Name===member) || {};
-  Object.entries(roleRow).forEach(([k,v])=>{
-    if(k==="Name"||k==="Points") return;
-    const d=parseHeaderDate(k); if(!d) return;
-    if(!inRange(d,start,end)) return;
-    const val=String(v||"").trim(); if(!val) return;
-    if(roleFilter && roleFilter!=="__ALL__" && roleFilter!=="Speaker" && roleFilter!=="Evaluator" && val!==roleFilter) return;
-    const lab=toLabel(d); buckets[lab]=(buckets[lab]||0)+1;
+  function bump(date){ const lab=toISO(date); buckets[lab]=(buckets[lab]||0)+1; }
+
+  // Role Taking
+  const rtRows = cleanedRows(await fetchGViz("Role Taking"));
+  (member ? rtRows.filter(r=>r.Name===member) : rtRows).forEach(row=>{
+    Object.entries(row).forEach(([k,v])=>{
+      if(k==="Name"||k==="Points") return;
+      const d=parseHeaderDate(k); if(!d) return;
+      if(!inRange(d,start,end)) return;
+      const val=String(v||"").trim(); if(!val) return;
+      if(roleFilter && roleFilter!=="__ALL__" && roleFilter!=="Speaker" && roleFilter!=="Evaluator" && val!==roleFilter) return;
+      bump(d);
+    });
   });
 
   // Speaker
-  const speechRow = cleanedRows(await fetchGViz("Speeches")).find(r=>r.Name===member) || {};
-  Object.entries(speechRow).forEach(([k,v])=>{
-    if(k==="Name"||k==="Points") return;
-    const d=parseHeaderDate(k); if(!d) return;
-    if(!inRange(d,start,end)) return;
-    if(!(v && String(v).trim())) return;
-    if(roleFilter && roleFilter!=="__ALL__" && roleFilter!=="Speaker") return;
-    const lab=toLabel(d); buckets[lab]=(buckets[lab]||0)+1;
+  const spRows = cleanedRows(await fetchGViz("Speeches"));
+  (member ? spRows.filter(r=>r.Name===member) : spRows).forEach(row=>{
+    Object.entries(row).forEach(([k,v])=>{
+      if(k==="Name"||k==="Points") return;
+      const d=parseHeaderDate(k); if(!d) return;
+      if(!inRange(d,start,end)) return;
+      if(!(v && String(v).trim())) return;
+      if(roleFilter && roleFilter!=="__ALL__" && roleFilter!=="Speaker") return;
+      bump(d);
+    });
   });
 
   // Evaluator
-  const evalRow = cleanedRows(await fetchGViz("Evaluations")).find(r=>r.Name===member) || {};
-  Object.entries(evalRow).forEach(([k,v])=>{
-    if(k==="Name"||k==="Points") return;
-    const d=parseHeaderDate(k); if(!d) return;
-    if(!inRange(d,start,end)) return;
-    const val=(typeof v==='string')?v.trim().toUpperCase():v;
-    const isTrue=(val===true || val==="TRUE");
-    if(!isTrue) return;
-    if(roleFilter && roleFilter!=="__ALL__" && roleFilter!=="Evaluator") return;
-    const lab=toLabel(d); buckets[lab]=(buckets[lab]||0)+1;
+  const evRows = cleanedRows(await fetchGViz("Evaluations"));
+  (member ? evRows.filter(r=>r.Name===member) : evRows).forEach(row=>{
+    Object.entries(row).forEach(([k,v])=>{
+      if(k==="Name"||k==="Points") return;
+      const d=parseHeaderDate(k); if(!d) return;
+      if(!inRange(d,start,end)) return;
+      const val=(typeof v==='string')?v.trim().toUpperCase():v;
+      if(!(val===true || val==="TRUE")) return;
+      if(roleFilter && roleFilter!=="__ALL__" && roleFilter!=="Evaluator") return;
+      bump(d);
+    });
   });
 
-  // (Optional) count non-empty cells in other tabs when no specific role filter
+  // Other tabs counted only when no specific role filter
   if(!roleFilter || roleFilter==="__ALL__"){
-    for(const tab of ["Level Completions","Awards","External","Other","Last Minute Roles"]){
-      const row = cleanedRows(await fetchGViz(tab)).find(r=>r.Name===member) || {};
-      Object.entries(row).forEach(([k,v])=>{
-        if(k==="Name"||k==="Points") return;
-        const d=parseHeaderDate(k); if(!d) return;
-        if(!inRange(d,start,end)) return;
-        if(!(v && String(v).trim())) return;
-        const lab=toLabel(d); buckets[lab]=(buckets[lab]||0)+1;
+    for(const tab of ["Level Completions","Awards","ExCom & Sub.","Early Attendance","Other","Last Minute Roles"]){
+      const rows = cleanedRows(await fetchGViz(tab));
+      (member ? rows.filter(r=>r.Name===member) : rows).forEach(row=>{
+        Object.entries(row).forEach(([k,v])=>{
+          if(k==="Name"||k==="Points") return;
+          const d=parseHeaderDate(k); if(!d) return;
+          if(!inRange(d,start,end)) return;
+          if(!(v && String(v).trim())) return;
+          bump(d);
+        });
       });
     }
   }
@@ -508,8 +552,9 @@ async function drawCumulative(member, start, end, roleFilter){
   const labels = Object.keys(buckets).sort();
   let cum=0;
   const values = labels.map(d=> (cum += buckets[d]));
+
   const ctx = document.getElementById('cumulativeChart').getContext('2d');
-  if (cumulativeChart) cumulativeChart.destroy();
+  resetChart(cumulativeChart);
   cumulativeChart = new Chart(ctx, {
     type:"line",
     data:{ labels, datasets:[{label:"Cumulative Activities", data:values, fill:false}] },
@@ -517,64 +562,60 @@ async function drawCumulative(member, start, end, roleFilter){
   });
 }
 
-// ---------------- Per-Meeting Details ----------------
+/** ===== Per-Meeting Details ===== **/
 async function renderMeetingDetails(member, start, end, roleFilter){
   const container = document.getElementById('meetingSummaries');
   container.innerHTML = "";
-  const byMeeting = {};
 
-  // helper to push an item
-  function push(date, label){
-    const lab = toLabel(date);
-    if(!byMeeting[lab]) byMeeting[lab]=[];
-    byMeeting[lab].push(label);
-  }
+  if(!member){ container.innerHTML = "<p>Select a member to see per-meeting details.</p>"; return; }
+
+  const byMeeting = {};
+  const add = (d, text)=>{ const k=toISO(d); if(!byMeeting[k]) byMeeting[k]=[]; byMeeting[k].push(text); };
 
   // Roles
-  const roleRow = cleanedRows(await fetchGViz("Role Taking")).find(r=>r.Name===member) || {};
-  Object.entries(roleRow).forEach(([k,v])=>{
+  const rtRow = cleanedRows(await fetchGViz("Role Taking")).find(r=>r.Name===member) || {};
+  Object.entries(rtRow).forEach(([k,v])=>{
     if(k==="Name"||k==="Points") return;
     const d=parseHeaderDate(k); if(!d) return;
     if(!inRange(d,start,end)) return;
     const val=String(v||"").trim(); if(!val) return;
     if(roleFilter && roleFilter!=="__ALL__" && roleFilter!=="Speaker" && roleFilter!=="Evaluator" && val!==roleFilter) return;
-    push(d, `Role: ${val}`);
+    add(d, `Role: ${val}`);
   });
 
   // Speeches
-  const speechRow = cleanedRows(await fetchGViz("Speeches")).find(r=>r.Name===member) || {};
-  Object.entries(speechRow).forEach(([k,v])=>{
+  const spRow = cleanedRows(await fetchGViz("Speeches")).find(r=>r.Name===member) || {};
+  Object.entries(spRow).forEach(([k,v])=>{
     if(k==="Name"||k==="Points") return;
     const d=parseHeaderDate(k); if(!d) return;
     if(!inRange(d,start,end)) return;
     const val=String(v||"").trim(); if(!val) return;
     if(roleFilter && roleFilter!=="__ALL__" && roleFilter!=="Speaker") return;
-    push(d, `Speaker: ${val}`);
+    add(d, `Speaker: ${val}`);
   });
 
   // Evaluations
-  const evalRow = cleanedRows(await fetchGViz("Evaluations")).find(r=>r.Name===member) || {};
-  Object.entries(evalRow).forEach(([k,v])=>{
+  const evRow = cleanedRows(await fetchGViz("Evaluations")).find(r=>r.Name===member) || {};
+  Object.entries(evRow).forEach(([k,v])=>{
     if(k==="Name"||k==="Points") return;
     const d=parseHeaderDate(k); if(!d) return;
     if(!inRange(d,start,end)) return;
     const val=(typeof v==='string')?v.trim().toUpperCase():v;
-    const isTrue=(val===true || val==="TRUE");
-    if(!isTrue) return;
+    if(!(val===true || val==="TRUE")) return;
     if(roleFilter && roleFilter!=="__ALL__" && roleFilter!=="Evaluator") return;
-    push(d, `Evaluator: ✓`);
+    add(d, `Evaluator: ✓`);
   });
 
-  // Other tabs when no specific role selected
+  // Other tabs if no specific role filter
   if(!roleFilter || roleFilter==="__ALL__"){
-    for(const tab of ["Level Completions","Awards","External","Other","Last Minute Roles"]){
+    for(const tab of ["Level Completions","Awards","ExCom & Sub.","Early Attendance","Other","Last Minute Roles"]){
       const row = cleanedRows(await fetchGViz(tab)).find(r=>r.Name===member) || {};
       Object.entries(row).forEach(([k,v])=>{
         if(k==="Name"||k==="Points") return;
         const d=parseHeaderDate(k); if(!d) return;
         if(!inRange(d,start,end)) return;
         const val=String(v||"").trim(); if(!val) return;
-        push(d, `${tab}: ${val}`);
+        add(d, `${tab}: ${val}`);
       });
     }
   }
@@ -590,41 +631,49 @@ async function renderMeetingDetails(member, start, end, roleFilter){
   });
 }
 
-// ---------------- Recompute ----------------
+/** ===== recompute engine ===== **/
 async function recomputeAll(){
   clearError();
-  const member = document.getElementById('memberSelect').value;
+  const member = document.getElementById('memberSelect').value || "";
   const roleFilter = document.getElementById('roleFilter').value;
   const start = document.getElementById('startDate').value ? new Date(document.getElementById('startDate').value) : null;
   const end   = document.getElementById('endDate').value ? new Date(document.getElementById('endDate').value) : null;
 
-  await updateKPIs(member, start, end, roleFilter);
-  await drawCategoryChart(member);
-  await drawRoleChart(member, start, end, roleFilter);
-  await drawCumulative(member, start, end, roleFilter);
-  await renderMeetingDetails(member, start, end, roleFilter);
+  // If mode is MEMBER and no member chosen, clear charts and KPIs (except leaderboard)
+  if(currentMode==="MEMBER" && !member){
+    document.getElementById('kpiMeetings').textContent = "—";
+    document.getElementById('kpiPoints').textContent = "—";
+    document.getElementById('kpiRoles').textContent = "—";
+    if(categoryChart) categoryChart.destroy();
+    if(roleChart) roleChart.destroy();
+    if(cumulativeChart) cumulativeChart.destroy();
+    document.getElementById('meetingSummaries').innerHTML = "<p>Select a member to see details.</p>";
+    // Keep Leaderboard visible
+  }else{
+    await updateKPIs(member || null, start, end, roleFilter);
+    await drawCategoryChart(member || null);
+    await drawRoleChart(member || null, start, end, roleFilter);
+    await drawCumulative(member || null, start, end, roleFilter);
+    await renderMeetingDetails(member || null, start, end, roleFilter);
+  }
 
-  // raw table for active tab
+  // refresh raw table for active tab
   const activeBtn = document.querySelector('.tab-btn.active');
   if (activeBtn){
-    await loadDetailTable(activeBtn.dataset.sheet, member);
+    await loadDetailTable(activeBtn.dataset.sheet, member || null);
   }
 }
 
-// ---------------- Date defaults (min/max) ----------------
+/** ===== Date defaults (min/max) ===== **/
 async function setDefaultDateRange(){
-  const roleRows = await fetchGViz("Role Taking");
-  const headers = dateColumnsFrom(roleRows);
-  const dates = headers.map(parseHeaderDate).filter(Boolean).sort((a,b)=>a-b);
+  const rt = await fetchGViz("Role Taking");
+  const dates = dateColumnsFrom(rt).map(parseHeaderDate).filter(Boolean).sort((a,b)=>a-b);
   if(!dates.length) return;
-  const min=dates[0], max=dates[dates.length-1];
-  const start = document.getElementById('startDate');
-  const end = document.getElementById('endDate');
-  start.value = toLabel(min);
-  end.value = toLabel(max);
+  document.getElementById('startDate').value = toISO(dates[0]);
+  document.getElementById('endDate').value = toISO(dates[dates.length-1]);
 }
 
-// ---------------- Init ----------------
+/** ===== init ===== **/
 document.addEventListener('DOMContentLoaded', async ()=>{
   try{
     await populateMembers();
@@ -632,26 +681,38 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     await setDefaultDateRange();
     await buildLeaderboard();
 
-    // Default: load Total tab table
-    const member = document.getElementById('memberSelect').value;
-    await loadDetailTable('Total', member);
-
-    // First compute all
+    // Default: All Members mode active; load Total tab
+    await loadDetailTable('Total', null);
     await recomputeAll();
 
-    // listeners
+    // filters
     document.getElementById('memberSelect').addEventListener('change', recomputeAll);
     document.getElementById('roleFilter').addEventListener('change', recomputeAll);
     document.getElementById('startDate').addEventListener('change', recomputeAll);
     document.getElementById('endDate').addEventListener('change', recomputeAll);
 
+    // tabs
     document.querySelectorAll('.tab-btn').forEach(btn=>{
       btn.addEventListener('click', async ()=>{
         document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
         btn.classList.add('active');
-        const member = document.getElementById('memberSelect').value;
+        const member = document.getElementById('memberSelect').value || null;
         await loadDetailTable(btn.dataset.sheet, member);
       });
+    });
+
+    // mode toggle
+    document.getElementById('modeAll').addEventListener('click', async ()=>{
+      currentMode = "ALL";
+      document.getElementById('modeAll').classList.add('active');
+      document.getElementById('modeMember').classList.remove('active');
+      await recomputeAll();
+    });
+    document.getElementById('modeMember').addEventListener('click', async ()=>{
+      currentMode = "MEMBER";
+      document.getElementById('modeMember').classList.add('active');
+      document.getElementById('modeAll').classList.remove('active');
+      await recomputeAll();
     });
 
   }catch(e){
