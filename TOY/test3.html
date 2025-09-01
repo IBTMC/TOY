@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Toastmasters Club Dashboard</title>
+
+<!-- Libs -->
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+<!-- Style (Toastmasters-inspired) -->
+<style>
+  :root{
+    --tm-navy:#004165;
+    --tm-gold:#F2DF74;
+    --tm-burgundy:#772432;
+    --tm-blue:#1C6BA0;
+    --card-bg:#ffffff;
+    --page-bg:#f6f8fb;
+  }
+  *{box-sizing:border-box}
+  body{margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial; background:var(--page-bg); color:#222}
+  header{background:var(--tm-navy); color:#fff; padding:18px 20px; display:flex; align-items:center; gap:14px}
+  header img{height:40px}
+  header h1{margin:0; font-size:20px; font-weight:700}
+  .container{max-width:1200px; margin:24px auto; padding:0 16px}
+  h2{color:var(--tm-navy); margin:24px 0 12px}
+  .card{background:var(--card-bg); border-radius:12px; box-shadow:0 6px 20px rgba(0,0,0,.07); padding:16px}
+  .grid{display:grid; gap:16px}
+  .grid-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .grid-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .kpi{display:flex; flex-direction:column; align-items:center; justify-content:center; padding:14px; border:1px solid #e7ebf0; border-radius:12px}
+  .kpi h3{margin:4px 0 2px; font-size:28px; color:var(--tm-burgundy)}
+  .kpi p{margin:0; color:#555}
+  .filters{display:flex; flex-wrap:wrap; gap:12px; align-items:end}
+  .field{display:flex; flex-direction:column; gap:6px}
+  select,input[type=date]{padding:10px 12px; border:1px solid #d3dae3; border-radius:10px; background:#fff; min-width:220px}
+  table.dataTable thead th{background:var(--tm-navy); color:#fff}
+  canvas{background:#fff; border-radius:12px; padding:10px}
+  .profile{display:flex; align-items:center; gap:14px}
+  .avatar{height:56px; width:56px; border-radius:50%; background:linear-gradient(135deg,var(--tm-blue),var(--tm-burgundy)); color:#fff; display:grid; place-items:center; font-weight:700}
+  .muted{color:#666; font-size:13px}
+  @media (max-width:900px){ .grid-3{grid-template-columns:1fr} .grid-2{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+
+<header>
+  <!-- Replace src with official Toastmasters + club logos if you want -->
+  <img alt="TM" src="https://upload.wikimedia.org/wikipedia/commons/thumb/6/6f/Toastmasters_International_2011_Logo.svg/320px-Toastmasters_International_2011_Logo.svg.png">
+  <h1>Toastmasters Club Dashboard</h1>
+</header>
+
+<div class="container">
+
+  <!-- Leaderboard -->
+  <h2>Leaderboard (Summary)</h2>
+  <div class="card">
+    <table id="leaderboard" class="display" style="width:100%"></table>
+    <p class="muted">Tip: click a member to open their profile below.</p>
+  </div>
+
+  <!-- Profile -->
+  <h2>Member Profile</h2>
+  <div class="card">
+    <div class="profile" style="margin-bottom:12px">
+      <div class="avatar" id="avatar">TM</div>
+      <div>
+        <div id="profileName" style="font-weight:700; font-size:18px;">Select a member from the leaderboard</div>
+        <div id="profileSub" class="muted">—</div>
+      </div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="grid grid-3" style="margin-top:10px">
+      <div class="kpi"><h3 id="meetingsCount">0</h3><p>Meetings Counted (Filtered)</p></div>
+      <div class="kpi"><h3 id="totalPointsAll">0</h3><p>Total Points (All)</p></div>
+      <div class="kpi"><h3 id="filteredPoints">0</h3><p>Points (Filtered, events)</p></div>
+      <div class="kpi"><h3 id="distinctRoles">0</h3><p>Distinct Roles (Filtered)</p></div>
+    </div>
+
+    <!-- Filters -->
+    <div class="filters" style="margin-top:14px">
+      <div class="field">
+        <label for="roleFilter">Filter by role</label>
+        <select id="roleFilter">
+          <option value="">All roles</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="startDate">Start date</label>
+        <input id="startDate" type="date">
+      </div>
+      <div class="field">
+        <label for="endDate">End date</label>
+        <input id="endDate" type="date">
+      </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="grid grid-2" style="margin-top:8px">
+      <canvas id="categoryChart" height="280"></canvas>
+      <canvas id="progressChart" height="280"></canvas>
+    </div>
+
+    <!-- Per-meeting table -->
+    <h3 style="color:var(--tm-navy); margin-top:10px">Per-Meeting Details</h3>
+    <table id="detailTable" class="display" style="width:100%"></table>
+  </div>
+</div>
+
+<script>
+/* ====== CONFIG: CSV links per sheet ====== */
+const SHEETS = {
+  Summary: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=1556398249&single=true&output=csv",
+  Total: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=1939085341&single=true&output=csv",
+  EarlyAttendance: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=1928408168&single=true&output=csv",
+  RoleTaking: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=23380471&single=true&output=csv",
+  Speeches: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=170161438&single=true&output=csv",
+  Evaluations: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=335593996&single=true&output=csv"
+};
+
+/* ====== Data holders ====== */
+let summaryData=[], totalData=[], eaData=[], roleData=[], spData=[], evData=[];
+let currentMember = "";
+let dtLeaderboard=null, dtDetails=null;
+let chartCategory=null, chartProgress=null;
+
+/* ====== Utils ====== */
+const fetchCSV = (url)=>new Promise(res=>{
+  Papa.parse(url,{download:true,header:true,skipEmptyLines:true,complete:r=>res(r.data)});
+});
+
+const initials = name => (name||"").split(/\s+/).map(x=>x[0]).join("").slice(0,2).toUpperCase();
+
+function safeDate(dStr){
+  // dStr like "12-Jul-25" or "2025-08-09"
+  if(!dStr) return null;
+  // Try native
+  const n = new Date(dStr);
+  if(!isNaN(n)) return n;
+  // Try custom dd-Mon-yy
+  const m = dStr.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{2})$/);
+  if(m){
+    const day=+m[1], monStr=m[2].toLowerCase(), yy=+m[3];
+    const mons={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+    const year=2000+yy;
+    const mon=mons[monStr];
+    if(mon!==undefined) return new Date(year,mon,day);
+  }
+  return null;
+}
+
+function valueAtDate(row, dateKey){ return row ? row[dateKey] : undefined; }
+
+/* ====== Load all ====== */
+(async function init(){
+  [summaryData, totalData, eaData, roleData, spData, evData] = await Promise.all([
+    fetchCSV(SHEETS.Summary),
+    fetchCSV(SHEETS.Total),
+    fetchCSV(SHEETS.EarlyAttendance),
+    fetchCSV(SHEETS.RoleTaking),
+    fetchCSV(SHEETS.Speeches),
+    fetchCSV(SHEETS.Evaluations),
+  ]);
+  buildLeaderboard();
+})();
+
+/* ====== Leaderboard ====== */
+function buildLeaderboard(){
+  if(dtLeaderboard) dtLeaderboard.destroy();
+  dtLeaderboard = $("#leaderboard").DataTable({
+    data: summaryData.filter(r=>r.Name && r.Points),
+    columns: [
+      {title:"Name", data:"Name"},
+      {title:"Points", data:"Points", render:d=>parseInt(d||0)}
+    ],
+    order:[[1,"desc"]],
+    pageLength: 25
+  });
+
+  $('#leaderboard tbody').on('click','tr',function(){
+    const row = dtLeaderboard.row(this).data();
+    if(row && row.Name){ openProfile(row.Name); }
+  });
+}
+
+/* ====== Profile (select member) ====== */
+function openProfile(member){
+  currentMember = member;
+  document.getElementById("profileName").textContent = member;
+  document.getElementById("avatar").textContent = initials(member);
+
+  // Subheader: official total points
+  const tRow = totalData.find(r=>r.Name===member);
+  const totalPointsAll = tRow ? parseInt(tRow.Points||0) : 0;
+  document.getElementById("profileSub").textContent = `Official Total Points: ${totalPointsAll}`;
+  document.getElementById("totalPointsAll").textContent = totalPointsAll;
+
+  // Build role dropdown (member-specific + Speaker/Evaluator)
+  const memberRoles = new Set();
+  roleData.filter(r=>r.Name===member).forEach(r=>{
+    Object.values(r).slice(2).forEach(v=>{ if(v) memberRoles.add(v); });
+  });
+  const spRow = spData.find(r=>r.Name===member);
+  const evRow = evData.find(r=>r.Name===member);
+  if(spRow && Object.values(spRow).slice(2).some(v=>v)) memberRoles.add("Speaker");
+  if(evRow && Object.values(evRow).slice(2).some(v=>v==="TRUE")) memberRoles.add("Evaluator");
+
+  const roleSel = document.getElementById("roleFilter");
+  roleSel.innerHTML = `<option value="">All roles</option>`;
+  [...memberRoles].sort().forEach(r=>{
+    const opt = document.createElement("option");
+    opt.value = r; opt.textContent = r;
+    roleSel.appendChild(opt);
+  });
+
+  // Reset date filters
+  document.getElementById("startDate").value = "";
+  document.getElementById("endDate").value = "";
+
+  // Compute & render
+  recomputeAndRender();
+}
+
+/* ====== Filters -> recompute all KPIs/charts/table ====== */
+function recomputeAndRender(){
+  if(!currentMember) return;
+
+  const roleFilter = document.getElementById("roleFilter").value; // "" or role
+  const sd = document.getElementById("startDate").value;
+  const ed = document.getElementById("endDate").value;
+  const startDate = sd ? new Date(sd) : null;
+  const endDate   = ed ? new Date(ed) : null;
+
+  const eaRow = eaData.find(r=>r.Name===currentMember) || {};
+  const roleRow = roleData.find(r=>r.Name===currentMember) || {};
+  const spRow = spData.find(r=>r.Name===currentMember) || {};
+  const evRow = evData.find(r=>r.Name===currentMember) || {};
+
+  // Date keys from Early Attendance (authoritative list of meeting dates)
+  const dateKeys = Object.keys(eaRow).slice(2);
+
+  // Helpers per date
+  const passesDate = d => {
+    const dt = safeDate(d);
+    if(!dt) return true; // if unknown format, don't block it
+    if(startDate && dt < startDate) return false;
+    if(endDate && dt > endDate) return false;
+    return true;
+  };
+
+  // Build rows for details and accumulate stats
+  const detailRows = [];
+  let meetingsCounted=0;
+  let filteredPoints=0; // events proxy
+  const roleSetFiltered = new Set();
+  const categoryTally = { "Role Taking":0, "Speaker":0, "Evaluator":0 };
+
+  for(const d of dateKeys){
+    // attendance gate (non-empty and not A/E)
+    const att = valueAtDate(eaRow,d);
+    const attended = !!(att && att!=="A" && att!=="E");
+    if(!attended) continue;
+    if(!passesDate(d)) continue;
+
+    // per-source values
+    const role = valueAtDate(roleRow,d) || "";
+    const hasSpeech = !!valueAtDate(spRow,d);
+    const isEval = (valueAtDate(evRow,d) === "TRUE");
+
+    // does this date match role filter?
+    const dateHasRole =
+      (roleFilter==="" ) ||
+      (roleFilter && role && role===roleFilter) ||
+      (roleFilter==="Speaker" && hasSpeech) ||
+      (roleFilter==="Evaluator" && isEval);
+
+    if(!dateHasRole) continue;
+
+    // Count meeting (filtered)
+    meetingsCounted++;
+
+    // Build row
+    const row = {
+      Date: d,
+      Attendance: att || "",
+      Roles: role || "",
+      Speech: hasSpeech ? "Yes" : "",
+      Evaluation: isEval ? "Yes" : ""
+    };
+    detailRows.push(row);
+
+    // Events proxy points
+    if(role){ filteredPoints++; categoryTally["Role Taking"]++; roleSetFiltered.add(role); }
+    if(hasSpeech){ filteredPoints++; categoryTally["Speaker"]++; roleSetFiltered.add("Speaker"); }
+    if(isEval){ filteredPoints++; categoryTally["Evaluator"]++; roleSetFiltered.add("Evaluator"); }
+  }
+
+  // KPIs
+  document.getElementById("meetingsCount").textContent = meetingsCounted;
+  document.getElementById("filteredPoints").textContent = filteredPoints;
+  document.getElementById("distinctRoles").textContent = roleSetFiltered.size;
+
+  // Charts (filtered)
+  drawCategoryChart(categoryTally);
+  drawProgressChartFiltered(detailRows);
+
+  // Details table
+  if(dtDetails) dtDetails.destroy();
+  dtDetails = $("#detailTable").DataTable({
+    data: detailRows,
+    columns: [
+      {title:"Date", data:"Date"},
+      {title:"Attendance", data:"Attendance"},
+      {title:"Roles", data:"Roles"},
+      {title:"Speech", data:"Speech"},
+      {title:"Evaluation", data:"Evaluation"}
+    ],
+    order:[[0,"asc"]],
+    pageLength: 25
+  });
+}
+
+/* ====== Charts ====== */
+function drawCategoryChart(tally){
+  const labels = Object.keys(tally);
+  const values = labels.map(k=>tally[k]);
+  if(chartCategory) chartCategory.destroy();
+  chartCategory = new Chart(document.getElementById("categoryChart").getContext("2d"), {
+    type:"bar",
+    data:{ labels, datasets:[{ label:"Events (Filtered)", data:values }] },
+    options:{
+      plugins:{ legend:{display:false}},
+      scales:{ y:{ beginAtZero:true, ticks:{ precision:0 } } }
+    }
+  });
+}
+
+function drawProgressChartFiltered(detailRows){
+  // Build cumulative over time from detail rows:
+  // Each row can contain up to 3 events (role, speech, evaluation)
+  // We’ll aggregate by date.
+  const byDate = {};
+  for(const r of detailRows){
+    const d = r.Date;
+    byDate[d] = (byDate[d]||0) + (r.Roles?1:0) + (r.Speech?1:0) + (r.Evaluation?1:0);
+  }
+  const dates = Object.keys(byDate).sort((a,b)=>{
+    const da=safeDate(a), db=safeDate(b);
+    if(da && db) return da - db;
+    return a.localeCompare(b);
+  });
+  let cum = 0;
+  const series = dates.map(d=> (cum += byDate[d]));
+
+  if(chartProgress) chartProgress.destroy();
+  chartProgress = new Chart(document.getElementById("progressChart").getContext("2d"), {
+    type:"line",
+    data:{ labels:dates, datasets:[{ label:"Cumulative Events (Filtered)", data:series, fill:false, tension:.25 }] },
+    options:{
+      plugins:{ legend:{display:false}},
+      scales:{ y:{ beginAtZero:true, ticks:{ precision:0 } } }
+    }
+  });
+}
+
+/* ====== Filter listeners ====== */
+document.getElementById("roleFilter").addEventListener("change", recomputeAndRender);
+document.getElementById("startDate").addEventListener("change", recomputeAndRender);
+document.getElementById("endDate").addEventListener("change", recomputeAndRender);
+</script>
+</body>
+</html>
