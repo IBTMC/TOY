@@ -7,6 +7,7 @@
   <script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.min.js"></script>
   <link rel="stylesheet" href="https://cdn.datatables.net/1.11.5/css/jquery.dataTables.min.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <style>
     body { font-family: Arial, sans-serif; margin:0; padding:0; background:#f9f9f9; }
     header { background:#772432; color:#fff; padding:10px 20px; display:flex; align-items:center; }
@@ -71,23 +72,41 @@
 </div>
 
 <script>
-const baseUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/gviz/tq?sheet=";
-const sheetNames = ["Summary","Total","Early Attendance","Role Taking","Last Minute Roles","Speeches","Evaluations","Level Completions","Awards","ExCom & Sub."];
+const sheetLinks = {
+  "Summary": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=1556398249&single=true&output=csv",
+  "Total": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=1939085341&single=true&output=csv",
+  "Early Attendance": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=1928408168&single=true&output=csv",
+  "Role Taking": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=23380471&single=true&output=csv",
+  "Last Minute Roles": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=10890228&single=true&output=csv",
+  "Speeches": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=170161438&single=true&output=csv",
+  "Evaluations": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=335593996&single=true&output=csv",
+  "Level Completions": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=1646576393&single=true&output=csv",
+  "Awards": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=302763050&single=true&output=csv",
+  "ExCom & Sub.": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=710668362&single=true&output=csv",
+  "Contests": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=859627444&single=true&output=csv",
+  "Table Topics": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=618267332&single=true&output=csv"
+};
 
 let sheetsData = {};
 let rolesList = new Set();
+let categoryChart, progressChart;
 
-async function loadSheet(sheetName) {
-  const url = baseUrl + encodeURIComponent(sheetName);
-  const response = await fetch(url);
-  const text = await response.text();
-  const json = JSON.parse(text.substr(47).slice(0,-2));
-  return json.table;
+async function loadSheet(name, url) {
+  return new Promise((resolve) => {
+    Papa.parse(url, {
+      download: true,
+      header: true,
+      complete: (results) => {
+        sheetsData[name] = results.data;
+        resolve();
+      }
+    });
+  });
 }
 
 async function init() {
-  for (let sheet of sheetNames) {
-    sheetsData[sheet] = await loadSheet(sheet);
+  for (const [name, url] of Object.entries(sheetLinks)) {
+    await loadSheet(name, url);
   }
   populateMembers();
   populateRoles();
@@ -96,39 +115,35 @@ async function init() {
 }
 
 function populateMembers() {
-  const table = sheetsData["Total"];
-  const memberSelect = $("#memberSelect");
-  table.rows.forEach(row => {
-    const name = row.c[0] ? row.c[0].v : null;
-    if (name && name !== "Name") {
-      memberSelect.append(`<option value="${name}">${name}</option>`);
+  const total = sheetsData["Total"];
+  total.forEach(row => {
+    if (row["Name"]) {
+      $("#memberSelect").append(`<option value="${row["Name"]}">${row["Name"]}</option>`);
     }
   });
 }
 
 function populateRoles() {
-  const roleSheet = sheetsData["Role Taking"];
-  roleSheet.rows.slice(2).forEach(r => {
-    r.c.slice(2).forEach(cell => {
-      if (cell && cell.v) rolesList.add(cell.v);
+  ["Role Taking","Last Minute Roles"].forEach(sheetName => {
+    sheetsData[sheetName].forEach(r => {
+      Object.values(r).slice(2).forEach(val => { if(val) rolesList.add(val); });
     });
   });
-  // Add special roles
-  rolesList.add("Speaker");
-  rolesList.add("Evaluator");
+  sheetsData["Speeches"].forEach(r => { if(r["Name"]) rolesList.add("Speaker"); });
+  sheetsData["Evaluations"].forEach(r => { if(r["Name"]) rolesList.add("Evaluator"); });
   rolesList.forEach(role => {
     $("#roleSelect").append(`<option value="${role}">${role}</option>`);
   });
 }
 
 function renderLeaderboard() {
-  const table = sheetsData["Summary"];
-  const cols = table.cols.map(c => c.label);
-  const data = table.rows.map(r => r.c.map(c => c ? c.v : ""));
+  const summary = sheetsData["Summary"];
+  const cols = Object.keys(summary[0] || {});
+  const data = summary.map(r => cols.map(c => r[c]));
   $("#leaderboardTable").DataTable({
     data: data,
-    columns: cols.map(c => ({ title:c })),
-    destroy: true
+    columns: cols.map(c => ({title:c})),
+    destroy:true
   });
 }
 
@@ -146,57 +161,64 @@ function updateMemberView() {
   const member = $("#memberSelect").val();
   if (!member) return;
   updateKPIs(member);
+  updateCategoryChart(member);
+  updateProgressChart(member);
 }
 
 function updateKPIs(member) {
-  const totalSheet = sheetsData["Total"];
-  let totalPoints = 0;
-  totalSheet.rows.forEach(r => {
-    if (r.c[0] && r.c[0].v === member) {
-      totalPoints = r.c[1] ? r.c[1].v : 0;
-    }
-  });
-  $("#totalPoints").text(totalPoints);
+  const total = sheetsData["Total"];
+  const row = total.find(r => r["Name"] === member);
+  $("#totalPoints").text(row ? row["Points"] : 0);
 
-  // Meetings Counted
-  const eaSheet = sheetsData["Early Attendance"];
-  let count = 0;
-  eaSheet.rows.forEach(r => {
-    if (r.c[0] && r.c[0].v === member) {
-      r.c.slice(2).forEach(cell => {
-        if (cell && cell.v && cell.v !== "A" && cell.v !== "E") count++;
+  const ea = sheetsData["Early Attendance"];
+  let count=0;
+  ea.forEach(r => {
+    if(r["Name"]===member){
+      Object.values(r).slice(2).forEach(v=>{
+        if(v && v!=="A" && v!=="E") count++;
       });
     }
   });
   $("#meetingsCount").text(count);
 
-  // Distinct Roles
-  let memberRoles = new Set();
-  const roleTaking = sheetsData["Role Taking"];
-  roleTaking.rows.forEach(r => {
-    if (r.c[0] && r.c[0].v === member) {
-      r.c.slice(2).forEach(cell => { if(cell&&cell.v) memberRoles.add(cell.v); });
-    }
+  let memberRoles=new Set();
+  ["Role Taking","Last Minute Roles"].forEach(sheet=>{
+    sheetsData[sheet].forEach(r=>{
+      if(r["Name"]===member){
+        Object.values(r).slice(2).forEach(v=>{ if(v) memberRoles.add(v); });
+      }
+    });
   });
-  const lmRoles = sheetsData["Last Minute Roles"];
-  lmRoles.rows.forEach(r => {
-    if (r.c[0] && r.c[0].v === member) {
-      r.c.slice(2).forEach(cell => { if(cell&&cell.v) memberRoles.add(cell.v); });
-    }
-  });
-  const speeches = sheetsData["Speeches"];
-  speeches.rows.forEach(r => {
-    if (r.c[0] && r.c[0].v === member) {
-      r.c.slice(2).forEach(cell => { if(cell&&cell.v) memberRoles.add("Speaker"); });
-    }
-  });
-  const evals = sheetsData["Evaluations"];
-  evals.rows.forEach(r => {
-    if (r.c[0] && r.c[0].v === member) {
-      r.c.slice(2).forEach(cell => { if(cell&&cell.v==="TRUE") memberRoles.add("Evaluator"); });
-    }
-  });
+  sheetsData["Speeches"].forEach(r=>{ if(r["Name"]===member) memberRoles.add("Speaker"); });
+  sheetsData["Evaluations"].forEach(r=>{ if(r["Name"]===member) memberRoles.add("Evaluator"); });
   $("#distinctRoles").text(memberRoles.size);
+}
+
+function updateCategoryChart(member) {
+  const total = sheetsData["Total"];
+  const row = total.find(r=>r["Name"]===member);
+  if(!row) return;
+  const labels = Object.keys(row).filter(k=>k!=="Name" && k!=="Points");
+  const values = labels.map(l=>parseInt(row[l])||0);
+  if(categoryChart) categoryChart.destroy();
+  categoryChart = new Chart(document.getElementById("categoryChart"),{
+    type:"pie",
+    data:{labels:labels, datasets:[{data:values}]}});
+}
+
+function updateProgressChart(member) {
+  const total = sheetsData["Total"];
+  const row = total.find(r=>r["Name"]===member);
+  if(!row) return;
+  const labels = Object.keys(row).filter(k=>k!=="Name" && k!=="Points");
+  const values = labels.map(l=>parseInt(row[l])||0);
+  let cum=0, cumValues=[];
+  values.forEach(v=>{ cum+=v; cumValues.push(cum); });
+  if(progressChart) progressChart.destroy();
+  progressChart = new Chart(document.getElementById("progressChart"),{
+    type:"line",
+    data:{labels:labels, datasets:[{label:"Cumulative Points", data:cumValues}]}
+  });
 }
 
 init();
