@@ -12,8 +12,21 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
 <style>
-  /* Toastmasters branding & layout styling here... */
-  /* (Same as previous version for brevity) */
+  body { font-family: Arial, sans-serif; margin: 0; background: #f8f9fa; }
+  header { background: #004165; color: white; padding: 10px 20px;
+           display: flex; justify-content: space-between; align-items: center; }
+  header img { height: 50px; }
+  .container { padding: 20px; }
+  .panel { background: white; border-radius: 10px; padding: 15px; margin: 15px 0; box-shadow: 0 2px 6px rgba(0,0,0,0.1);}
+  .kpis { display: flex; gap: 20px; }
+  .kpis .panel { flex: 1; text-align: center; font-size: 1.2em; }
+  .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .tabs { display: flex; gap: 10px; margin-bottom: 10px; }
+  .tabs button.active { background: #004165; color: white; }
+  footer { text-align: center; padding: 10px; font-size: 0.9em; color: #555; }
+  .topbar { display: flex; justify-content: space-between; align-items: center; }
+  .filters { display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 20px; }
+  select, input { padding: 5px; }
 </style>
 </head>
 <body>
@@ -35,23 +48,55 @@
   </div>
 
   <div class="filters panel">
-    <!-- Filters markup (unchanged) -->
+    <div>
+      <label>Select member</label><br>
+      <select id="memberSelect"><option value="">— Select —</option></select>
+    </div>
+    <div>
+      <label>Filter by role (optional)</label><br>
+      <select id="roleFilter"><option value="">All roles</option></select>
+    </div>
+    <div>
+      <label>Start date</label><br>
+      <input type="date" id="startDate">
+    </div>
+    <div>
+      <label>End date</label><br>
+      <input type="date" id="endDate">
+    </div>
   </div>
 
   <div class="kpis">
-    <!-- KPI panels markup -->
+    <div class="panel"><div>Meetings Counted</div><div id="kpiMeetings">0</div></div>
+    <div class="panel"><div>Total Points</div><div id="kpiPoints">0</div></div>
+    <div class="panel"><div>Distinct Roles</div><div id="kpiRoles">0</div></div>
   </div>
 
   <div class="charts">
-    <!-- Chart canvases -->
+    <div class="panel"><h3>Category Breakdown</h3><canvas id="categoryChart"></canvas></div>
+    <div class="panel"><h3>Roles Breakdown</h3><canvas id="roleChart"></canvas></div>
+    <div class="panel" style="grid-column: span 2;"><h3>Cumulative Progress</h3><canvas id="cumulativeChart"></canvas></div>
   </div>
 
-  <div class="cards">
-    <!-- Meeting details panel -->
+  <div class="panel">
+    <h3>Per-Meeting Details</h3>
+    <div id="meetingDetails"></div>
   </div>
 
-  <div class="panel tabs-wrapper">
-    <!-- Raw data tabs and table -->
+  <div class="panel">
+    <div class="tabs">
+      <button class="tab-btn active" data-sheet="Total">Total</button>
+      <button class="tab-btn" data-sheet="Role Taking">Role Taking</button>
+      <button class="tab-btn" data-sheet="Speeches">Speeches</button>
+      <button class="tab-btn" data-sheet="Evaluations">Evaluations</button>
+      <button class="tab-btn" data-sheet="Level Completions">Level Completions</button>
+      <button class="tab-btn" data-sheet="Awards">Awards</button>
+      <button class="tab-btn" data-sheet="ExCom & Sub.">ExCom & Sub.</button>
+      <button class="tab-btn" data-sheet="Early Attendance">Early Attendance</button>
+      <button class="tab-btn" data-sheet="Other">Other</button>
+      <button class="tab-btn" data-sheet="Last Minute Roles">Last Minute Roles</button>
+    </div>
+    <table id="detailTable" class="display" style="width:100%"></table>
   </div>
 
   <footer>Live from Google Sheets • Toastmasters compliant</footer>
@@ -59,7 +104,6 @@
 
 <script>
 const SHEET_ID = "2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx";
-const CATEGORY_KEYS = ["Early Attendance","Role Taking","Speeches","Evaluations","Level Completions","Awards","ExCom & Sub.","Contests","External","Other","Last Minute Roles"];
 const DETAIL_TABS = ["Total","Role Taking","Speeches","Evaluations","Level Completions","Awards","ExCom & Sub.","Early Attendance","Other","Last Minute Roles"];
 let cache = {};
 let currentMode = "ALL";
@@ -77,95 +121,69 @@ async function fetchGViz(sheetName) {
   const rows = json.table.rows.map(r => {
     const obj = {};
     (r.c || []).forEach((cell, i) => {
-      const key = cols[i] || `col${i}`;
-      obj[key] = cell ? (cell.f ?? cell.v ?? "") : "";
-      if (key === "ExCom & Sub.") obj["ExCom_And_Sub"] = obj[key];
+      obj[cols[i] || `col${i}`] = cell ? (cell.f ?? cell.v ?? "") : "";
     });
-    if (obj["ExCom_And_Sub"] === undefined) obj["ExCom_And_Sub"] = obj["ExCom & Sub."] || "";
     return obj;
   });
   cache[sheetName] = rows;
   return rows;
 }
 
-function showError(msg) {
-  const box = document.getElementById("errorBox");
-  box.textContent = msg;
-  box.classList.remove("hidden");
-}
-function clearError() {
-  document.getElementById("errorBox").classList.add("hidden");
-}
-function toISODate(d) {
-  return d.toISOString().slice(0,10);
-}
-function parseDate(str) {
-  const d = new Date(str);
-  if (!isNaN(d)) return d;
-  const m = str.match(/^(\d{1,2})[-\/ ]([A-Za-z]{3})[-\/ ](\d{2,4})$/);
-  if (m) {
-    const [_, dd, mon3, yy] = m;
-    const map = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
-    const y = +yy < 100 ? 2000 + (+yy) : +yy;
-    return new Date(y, map[mon3], +dd);
-  }
-  return null;
-}
-function inRange(d,start,end) {
-  if (!d) return false;
-  if (start && d < start) return false;
-  if (end && d > end) return false;
-  return true;
-}
 function cleanedRows(rows) {
   return rows.filter(r => r.Name && String(r.Name).trim());
 }
-function dateColumns(rows) {
-  const sample = rows[0] || {};
-  return Object.keys(sample).filter(k => k !== "Name" && k !== "Points" && parseDate(k));
+
+async function populateMemberFilter() {
+  const rows = cleanedRows(await fetchGViz("Total"));
+  const members = [...new Set(rows.map(r => r.Name))];
+  const sel = document.getElementById("memberSelect");
+  sel.innerHTML = `<option value="">— Select —</option>` + members.map(m => `<option>${m}</option>`).join("");
+}
+async function populateRoleFilter() {
+  const rows = await fetchGViz("Role Taking");
+  const roles = new Set();
+  rows.forEach(r => { Object.values(r).forEach(v => { if (v && typeof v === "string") roles.add(v); }); });
+  const sel = document.getElementById("roleFilter");
+  sel.innerHTML = `<option value="">All roles</option>` + [...roles].map(r => `<option>${r}</option>`).join("");
+}
+async function loadDetailTable(sheetName, member) {
+  const rows = await fetchGViz(sheetName);
+  const headers = Object.keys(rows[0] || {});
+  const data = rows.filter(r => !member || r.Name === member).map(r => headers.map(h => r[h]));
+  if ($.fn.dataTable.isDataTable("#detailTable")) $("#detailTable").DataTable().destroy();
+  $("#detailTable").empty();
+  $("#detailTable").DataTable({ data, columns: headers.map(h => ({title:h})) });
+}
+
+async function recomputeAll() {
+  const member = document.getElementById("memberSelect").value || null;
+  await loadDetailTable(document.querySelector(".tab-btn.active").dataset.sheet, member);
+  // KPIs etc can be filled here
 }
 
 async function initAll() {
-  try {
-    // Preload all data sheets
-    await Promise.all(DETAIL_TABS.map(fn => fetchGViz(fn)));
-    await fetchGViz("Summary"); // for leaderboard if needed
+  await Promise.all(DETAIL_TABS.map(fn => fetchGViz(fn)));
+  await fetchGViz("Summary");
+  await populateMemberFilter();
+  await populateRoleFilter();
+  await recomputeAll();
 
-    populateMemberFilter();
-    populateRoleFilter();
-    setupDatePickers();
-    buildLeaderboard();
-    loadDetailTable("Total", null);
-    recomputeAll();
-
-    // Add event listeners after data loads
-    document.querySelectorAll("#memberSelect, #roleFilter, #startDate, #endDate").forEach(el => el.addEventListener("change", recomputeAll));
-    document.querySelectorAll(".tab-btn").forEach(btn => btn.addEventListener("click", async () => {
-      document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
-      btn.classList.add("active");
-      const mem = document.getElementById("memberSelect").value || null;
-      loadDetailTable(btn.dataset.sheet, mem);
-    }));
-    document.getElementById("modeAll").addEventListener("click", async () => {
-      currentMode="ALL"; document.getElementById("modeAll").classList.add("active");
-      document.getElementById("modeMember").classList.remove("active"); recomputeAll();
-    });
-    document.getElementById("modeMember").addEventListener("click", async () => {
-      currentMode="MEMBER"; document.getElementById("modeMember").classList.add("active");
-      document.getElementById("modeAll").classList.remove("active"); recomputeAll();
-    });
-
-  } catch(err) {
-    showError("Initialization failed: " + err);
-    console.error(err);
-  }
+  document.querySelectorAll("#memberSelect, #roleFilter, #startDate, #endDate").forEach(el => el.addEventListener("change", recomputeAll));
+  document.querySelectorAll(".tab-btn").forEach(btn => btn.addEventListener("click", async () => {
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    await recomputeAll();
+  }));
+  document.getElementById("modeAll").addEventListener("click", async () => {
+    currentMode="ALL"; document.getElementById("modeAll").classList.add("active");
+    document.getElementById("modeMember").classList.remove("active"); recomputeAll();
+  });
+  document.getElementById("modeMember").addEventListener("click", async () => {
+    currentMode="MEMBER"; document.getElementById("modeMember").classList.add("active");
+    document.getElementById("modeAll").classList.remove("active"); recomputeAll();
+  });
 }
 
-// ... [All other functions: populateMemberFilter, populateRoleFilter, setupDatePickers,
-// buildLeaderboard, recomputeAll, loadDetailTable, drawCategoryChart, drawRoleChart,
-// drawCumulative, renderMeetingDetails] ...
-
-// Start
 document.addEventListener("DOMContentLoaded", initAll);
 </script>
 </body>
