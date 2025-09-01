@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Toastmasters Dashboard</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+    h1 { color: #004165; }
+    .kpi { display: inline-block; margin: 10px; padding: 15px; background: white; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1);}
+    .filters { margin: 20px 0; }
+    select, input { margin: 5px; padding: 5px; }
+    canvas { margin: 20px 0; background: white; padding: 10px; border-radius: 8px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; background: white;}
+    th, td { padding: 8px; border: 1px solid #ccc; }
+    th { background: #004165; color: white; }
+    .badge-role { padding: 4px 8px; border-radius: 6px; color: white; font-size: 0.85em; }
+    .badge-speaker { background-color: #2e7d32; }
+    .badge-evaluator { background-color: #ef6c00; }
+    .badge-default { background-color: #004165; }
+  </style>
+</head>
+<body>
+  <h1>Toastmasters Dashboard</h1>
+
+  <div class="filters">
+    <label>Select member:</label>
+    <select id="memberSelect"><option>— Select —</option></select>
+    <label>Filter by role:</label>
+    <select id="roleSelect"><option>All roles</option></select>
+    <label>From:</label><input type="date" id="fromDate">
+    <label>To:</label><input type="date" id="toDate">
+  </div>
+
+  <div id="kpis">
+    <div class="kpi"><strong>Meetings Counted</strong><br><span id="meetingsCount">0</span></div>
+    <div class="kpi"><strong>Total Points</strong><br><span id="totalPoints">0</span></div>
+    <div class="kpi"><strong>Distinct Roles</strong><br><span id="distinctRoles">0</span></div>
+  </div>
+
+  <h2>Category Breakdown</h2>
+  <canvas id="breakdownChart"></canvas>
+
+  <h2>Cumulative Progress</h2>
+  <canvas id="progressChart"></canvas>
+
+  <h2>Leaderboard (Club)</h2>
+  <table id="leaderboard">
+    <thead><tr><th>Name</th><th>Points</th></tr></thead>
+    <tbody></tbody>
+  </table>
+
+  <h2>Details</h2>
+  <button class="btn btn-sm btn-outline-primary mb-2" id="toggleAccordion">Expand All</button>
+  <div class="accordion" id="detailsAccordion"></div>
+
+<script>
+const sheetUrls = {
+  "Summary": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=1556398249&single=true&output=csv",
+  "Total": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=1939085341&single=true&output=csv",
+  "Early Attendance": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=1928408168&single=true&output=csv",
+  "Role Taking": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=23380471&single=true&output=csv",
+  "Speeches": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=170161438&single=true&output=csv",
+  "Evaluations": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=335593996&single=true&output=csv"
+};
+
+let sheets = {};
+let members = [];
+
+function loadSheets() {
+  let loaded = 0, total = Object.keys(sheetUrls).length;
+  for (let [name, url] of Object.entries(sheetUrls)) {
+    Papa.parse(url, {
+      download: true, header: true, skipEmptyLines: true,
+      complete: function(results) {
+        sheets[name] = results.data;
+        loaded++;
+        if (loaded === total) initDashboard();
+      }
+    });
+  }
+}
+
+function initDashboard() {
+  // Populate members
+  members = [...new Set(sheets["Total"].map(r => r.Name).filter(n => n && n !== "Name"))];
+  let memberSelect = document.getElementById("memberSelect");
+  members.forEach(m => {
+    let opt = document.createElement("option"); opt.text = m; opt.value = m;
+    memberSelect.add(opt);
+  });
+
+  // Leaderboard
+  let tbody = document.querySelector("#leaderboard tbody");
+  sheets["Summary"].forEach(r => {
+    if (r.Name && r.Points) {
+      let tr = document.createElement("tr");
+      tr.innerHTML = `<td>${r.Name}</td><td>${r.Points}</td>`;
+      tbody.appendChild(tr);
+    }
+  });
+
+  document.getElementById("memberSelect").addEventListener("change", updateDashboard);
+  document.getElementById("roleSelect").addEventListener("change", updateDashboard);
+  document.getElementById("fromDate").addEventListener("change", updateDashboard);
+  document.getElementById("toDate").addEventListener("change", updateDashboard);
+  document.getElementById("toggleAccordion").addEventListener("click", toggleAccordion);
+}
+
+function updateDashboard() {
+  let member = document.getElementById("memberSelect").value;
+  if (member === "— Select —") return;
+
+  let roleSelect = document.getElementById("roleSelect");
+  roleSelect.innerHTML = '<option>All roles</option>';
+
+  // Total Points
+  let totalRow = sheets["Total"].find(r => r.Name === member);
+  let totalPoints = totalRow ? +totalRow.Points || 0 : 0;
+  document.getElementById("totalPoints").innerText = totalPoints;
+
+  // Meetings Counted
+  let meetings = 0;
+  sheets["Early Attendance"].forEach(r => {
+    if (r.Name === member) {
+      Object.values(r).slice(2).forEach(val => {
+        if (val && val !== "A" && val !== "E") meetings++;
+      });
+    }
+  });
+  document.getElementById("meetingsCount").innerText = meetings;
+
+  // Distinct Roles
+  let distinct = new Set();
+  let roles = new Set();
+  sheets["Role Taking"].forEach(r => {
+    if (r.Name === member) {
+      Object.values(r).slice(2).forEach(val => { if (val) { distinct.add(val); roles.add(val); }});
+    }
+  });
+  sheets["Speeches"].forEach(r => { if (r.Name === member && Object.values(r).slice(2).some(v => v)) { distinct.add("Speaker"); roles.add("Speaker"); }});
+  sheets["Evaluations"].forEach(r => { if (r.Name === member && Object.values(r).slice(2).some(v => v === "TRUE")) { distinct.add("Evaluator"); roles.add("Evaluator"); }});
+  document.getElementById("distinctRoles").innerText = distinct.size;
+
+  roles.forEach(role => { let opt = document.createElement("option"); opt.text = role; opt.value = role; roleSelect.add(opt); });
+
+  // Charts
+  drawBreakdownChart(totalRow);
+  drawProgressChart(member);
+
+  // Details
+  buildDetails(member);
+}
+
+function drawBreakdownChart(row) {
+  if (!row) return;
+  let labels = Object.keys(row).slice(2);
+  let values = labels.map(k => +row[k] || 0);
+  let ctx = document.getElementById("breakdownChart").getContext("2d");
+  if (window.breakdownChart) window.breakdownChart.destroy();
+  window.breakdownChart = new Chart(ctx, {
+    type: 'pie',
+    data: { labels: labels, datasets: [{ data: values }] }
+  });
+}
+
+function drawProgressChart(member) {
+  let dates = [], counts = [];
+  let rows = sheets["Early Attendance"].find(r => r.Name === member);
+  if (!rows) return;
+  let cols = Object.keys(rows).slice(2);
+  cols.forEach((c,i) => {
+    let val = rows[c];
+    if (val && val !== "A" && val !== "E") {
+      dates.push(c);
+      counts.push(i+1);
+    }
+  });
+  let ctx = document.getElementById("progressChart").getContext("2d");
+  if (window.progressChart) window.progressChart.destroy();
+  window.progressChart = new Chart(ctx, {
+    type: 'line',
+    data: { labels: dates, datasets: [{ label:"Meetings", data: counts, fill:false, borderColor:"#004165"}]}
+  });
+}
+
+function buildDetails(member) {
+  let from = document.getElementById("fromDate").value;
+  let to = document.getElementById("toDate").value;
+  let roleFilter = document.getElementById("roleSelect").value;
+  let accordion = document.getElementById("detailsAccordion");
+  accordion.innerHTML = "";
+
+  const categories = {
+    "Speeches": sheets["Speeches"],
+    "Evaluations": sheets["Evaluations"],
+    "Role Taking": sheets["Role Taking"]
+  };
+
+  let index = 0;
+  for (let [cat, rows] of Object.entries(categories)) {
+    let tableRows = "";
+    rows.forEach(r => {
+      if (r.Name === member) {
+        Object.entries(r).forEach(([k,v]) => {
+          if (k !== "Name" && v && v !== "FALSE") {
+            let dateOk = true;
+            if (from && new Date(k) < new Date(from)) dateOk = false;
+            if (to && new Date(k) > new Date(to)) dateOk = false;
+            if (!dateOk) return;
+
+            let role = (cat === "Speeches") ? "Speaker" : (cat === "Evaluations") ? "Evaluator" : v;
+            if (roleFilter !== "All roles" && roleFilter !== role) return;
+
+            let badgeClass = role === "Speaker" ? "badge-speaker" : role === "Evaluator" ? "badge-evaluator" : "badge-default";
+            tableRows += `<tr><td>${k}</td><td><span class="badge-role ${badgeClass}">${role}</span></td></tr>`;
+          }
+        });
+      }
+    });
+
+    if (!tableRows) continue;
+
+    let item = document.createElement("div");
+    item.className = "accordion-item";
+    item.innerHTML = `
+      <h2 class="accordion-header" id="heading${index}">
+        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse${index}">
+          ${cat}
+        </button>
+      </h2>
+      <div id="collapse${index}" class="accordion-collapse collapse" data-bs-parent="#detailsAccordion">
+        <div class="accordion-body">
+          <table class="table table-sm">
+            <thead><tr><th>Date</th><th>Role</th></tr></thead>
+            <tbody>${tableRows}</tbody>
+          </table>
+        </div>
+      </div>`;
+    accordion.appendChild(item);
+    index++;
+  }
+}
+
+function toggleAccordion() {
+  const accordion = document.getElementById("detailsAccordion");
+  const btn = document.getElementById("toggleAccordion");
+  const sections = accordion.querySelectorAll(".accordion-collapse");
+  let allCollapsed = Array.from(sections).every(s => !s.classList.contains("show"));
+  sections.forEach(s => {
+    if (allCollapsed) new bootstrap.Collapse(s, { show: true });
+    else new bootstrap.Collapse(s, { hide: true });
+  });
+  btn.textContent = allCollapsed ? "Collapse All" : "Expand All";
+}
+
+loadSheets();
+</script>
+</body>
+</html>
