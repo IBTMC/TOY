@@ -1,0 +1,524 @@
+I want the chart and tables not stretch the page as they are very large, and also to have different view buttons instead of having everything below each other:
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Toastmasters Club Dashboard</title>
+
+<!-- Libs -->
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+<style>
+  :root{
+    --tm-navy:#004165; --tm-gold:#F2DF74; --tm-burgundy:#772432; --tm-blue:#1C6BA0;
+    --card:#fff; --bg:#f6f8fb; --muted:#667085;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;background:var(--bg);color:#1d2939}
+  header{background:var(--tm-navy);color:#fff;display:flex;align-items:center;gap:12px;padding:16px 18px}
+  header img{height:40px}
+  header h1{margin:0;font-size:18px;font-weight:700}
+  .container{max-width:1200px;margin:22px auto;padding:0 14px}
+  h2{color:var(--tm-navy);margin:20px 0 10px}
+  h3{margin:16px 0 8px;color:var(--tm-navy)}
+  .card{background:var(--card);border-radius:12px;box-shadow:0 6px 18px rgba(16,24,40,.08);padding:14px}
+  .grid{display:grid;gap:14px}
+  .grid-2{grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
+  .grid-3{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+  .kpi{border:1px solid #e5e7eb;border-radius:12px;padding:10px;text-align:center}
+  .kpi h3{margin:3px 0 2px;font-size:26px;color:var(--tm-burgundy)}
+  .kpi p{margin:0;color:var(--muted);font-size:13px}
+  .filters{display:flex;flex-wrap:wrap;gap:10px;align-items:end}
+  .field{display:flex;flex-direction:column;gap:6px}
+  select,input[type=date]{padding:10px 12px;border:1px solid #d0d5dd;border-radius:10px;background:#fff;min-width:220px}
+  .profile{display:flex;align-items:center;gap:12px}
+  .avatar{height:52px;width:52px;border-radius:50%;display:grid;place-items:center;font-weight:700;color:#fff;background:linear-gradient(135deg,var(--tm-blue),var(--tm-burgundy))}
+  .muted{color:var(--muted);font-size:13px}
+  canvas{background:#fff;border-radius:12px;padding:8px;max-height:320px}
+  .dataTables_wrapper{overflow-x:auto}
+  table.dataTable thead th{background:var(--tm-navy);color:#fff}
+  footer{margin:22px 0;color:var(--muted);text-align:center;font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <img alt="Toastmasters" src="https://upload.wikimedia.org/wikipedia/commons/thumb/6/6f/Toastmasters_International_2011_Logo.svg/320px-Toastmasters_International_2011_Logo.svg.png">
+  <h1>Toastmasters of the Year — Club Dashboard</h1>
+</header>
+
+<div class="container">
+  <!-- Leaderboard -->
+  <h2>Leaderboard (Summary)</h2>
+  <div class="card">
+    <table id="leaderboard" class="display" style="width:100%"></table>
+    <p class="muted">Tip: click a member to open their profile below.</p>
+  </div>
+
+  <!-- Profile -->
+  <h2>Member Profile</h2>
+  <div class="card">
+    <div class="profile" style="margin-bottom:10px">
+      <div class="avatar" id="avatar">TM</div>
+      <div>
+        <div id="profileName" style="font-weight:700;font-size:18px">Select a member from the leaderboard</div>
+        <div id="profileSub" class="muted">—</div>
+      </div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="grid grid-3" style="margin-top:8px">
+      <div class="kpi"><h3 id="meetingsCount">0</h3><p>Meetings Counted (Filtered)</p></div>
+      <div class="kpi"><h3 id="totalPointsAll">0</h3><p>Total Points (All)</p></div>
+      <div class="kpi"><h3 id="filteredPoints">0</h3><p>Points (Filtered, Weighted)</p></div>
+      <div class="kpi"><h3 id="distinctRoles">0</h3><p>Distinct Roles (Filtered)</p></div>
+    </div>
+
+    <!-- Filters -->
+    <div class="filters" style="margin-top:12px">
+      <div class="field">
+        <label for="roleFilter">Filter by role</label>
+        <select id="roleFilter"><option value="">All roles</option></select>
+      </div>
+      <div class="field">
+        <label for="startDate">Start date</label>
+        <input id="startDate" type="date">
+      </div>
+      <div class="field">
+        <label for="endDate">End date</label>
+        <input id="endDate" type="date">
+      </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="grid grid-2" style="margin-top:10px">
+      <canvas id="categoryChart" height="260"></canvas>
+      <canvas id="progressChart" height="260"></canvas>
+    </div>
+
+    <!-- Details -->
+    <h3 style="margin-top:12px">Per-Meeting Details</h3>
+    <table id="detailTable" class="display" style="width:100%"></table>
+  </div>
+
+  <!-- Club-wide progress -->
+  <h2>Club-wide Cumulative Progress</h2>
+  <div class="card">
+    <canvas id="clubProgressChart" height="280"></canvas>
+    <p class="muted" id="clubTotalsNote" style="margin-top:6px">—</p>
+  </div>
+</div>
+
+<footer>Toastmasters branding colors applied. Data live from published Google Sheets CSV.</footer>
+
+<script>
+/* ---------- CSV Endpoints ---------- */
+const SHEETS = {
+  Summary: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=1556398249&single=true&output=csv",
+  Total: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=1939085341&single=true&output=csv",
+  EarlyAttendance: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=1928408168&single=true&output=csv",
+  RoleTaking: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=23380471&single=true&output=csv",
+  LastMinuteRoles: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=10890228&single=true&output=csv",
+  Speeches: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=170161438&single=true&output=csv",
+  Evaluations: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=335593996&single=true&output=csv",
+  LevelCompletions: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=1646576393&single=true&output=csv",
+  Awards: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=302763050&single=true&output=csv",
+  ExComSub: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=710668362&single=true&output=csv",
+  Contests: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=859627444&single=true&output=csv",
+  TableTopics: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=618267332&single=true&output=csv"
+};
+
+/* ---------- Point Rules (official) ---------- */
+const POINT_RULES = {
+  earlyAttendance: v => (v === "E0" ? 1 : 0),
+  roles: {"MC":3,"GE":2,"TTM":2,"Timer":1,"Ah Counter":1,"Grammarian":1,"Listener":1,"Evaluator":2,"Evaluators' Evaluator":1},
+  speech: 3,
+  evaluationTrue: 2,
+  awards: {"Best Speaker":2,"Best Evaluator":1,"Best TT":1,"Best Table Topics":1,"Best Role Taker":2},
+  levels: {"Level 1":5,"Level 2":6,"Level 3":7,"Level 4":8,"Level 5":9,"DTM":15},
+  excom: {
+    "Club Officer":12,"Area Director":17,"Division Director":22,
+    "Club Growth Director":27,"Program Quality Director":32,"District Director":37,
+    "Member of DD/PQD/CGD/PRM Teams":6,"Subcommittee member":6
+  },
+  contestBase: {"Table Topics":1,"Evaluation":1,"Humorous":2,"International":3,"Contest Chair":4,"Contest Role Taker":2},
+  placement: {"1st":4,"2nd":3,"3rd":2},
+  external: {
+    "Event Chair (Physical)":10,"Event Chair (Online)":8,
+    "Head of Education (Physical)":9,"Head of Education (Online)":7,
+    "Head of PR (Physical)":8,"Head of PR (Online)":6,
+    "Head of Logistics (Physical)":8,"Head of Logistics (Online)":5,
+    "Head of IT (Physical)":6,"Head of IT (Online)":5,
+    "Facilitator (Physical)":7,"Facilitator (Online)":5,
+    "DTAC Head of Committee":13,"DTAC Committee Member":6,"DTAC Role Taker":4,
+    "External Lead (ExCom Approved)":3,"Newsletter Editor":4,"YLP Volunteer":5,
+    "Outside Speech":2,"Dual Member (per club)":3
+  }
+};
+
+/* ---------- Data holders ---------- */
+let summaryData=[], totalData=[], eaData=[], roleData=[], lmrData=[], spData=[], evData=[], lvlData=[], awdData=[], excomData=[], contestData=[], ttData=[];
+let dtLeaderboard=null, dtDetails=null, chartCategory=null, chartProgress=null, chartClub=null;
+let currentMember="";
+
+/* ---------- Helpers ---------- */
+const fetchCSV = (url)=>new Promise(res=>{
+  Papa.parse(url,{download:true,header:true,skipEmptyLines:true,complete:r=>res(r.data)});
+});
+const initials = name => (name||"").split(/\s+/).map(s=>s[0]).join("").slice(0,2).toUpperCase();
+const val = (row,key)=>row?row[key]:undefined;
+const dateKeysOf = row => Object.keys(row||{}).slice(2);
+
+function safeDate(dStr){
+  if(!dStr) return null;
+  const n = new Date(dStr); if(!isNaN(n)) return n;
+  const m = dStr.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{2})$/);
+  if(m){ const mons={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+    return new Date(2000+(+m[3]), mons[m[2].toLowerCase()], +m[1]);
+  }
+  return null;
+}
+
+function scoreRoleName(r){
+  if(!r) return 0;
+  const exact = POINT_RULES.roles[r]; if(exact!=null) return exact;
+  const t=r.toLowerCase();
+  if(t.includes("mc")) return 3;
+  if(t.includes("general evaluator")||t==="ge") return 2;
+  if(t.includes("ttm")||t.includes("table topics master")) return 2;
+  if(t.includes("timer")) return 1;
+  if(t.includes("ah")) return 1;
+  if(t.includes("grammar")) return 1;
+  if(t.includes("listener")) return 1;
+  if(t.includes("evaluator")) return 2;
+  return 0;
+}
+function scoreAwardText(txt){
+  if(!txt) return 0; const t=txt.toLowerCase();
+  if(t.includes("best speaker")) return POINT_RULES.awards["Best Speaker"];
+  if(t.includes("best evaluator")) return POINT_RULES.awards["Best Evaluator"];
+  if(t.includes("best tt")||t.includes("best table topics")) return POINT_RULES.awards["Best Table Topics"];
+  if(t.includes("best role taker")) return POINT_RULES.awards["Best Role Taker"];
+  return 0;
+}
+function scoreLevelText(txt){
+  if(!txt) return 0; const t=txt.trim();
+  if(POINT_RULES.levels[t]!=null) return POINT_RULES.levels[t];
+  const m=t.match(/level\s*([1-5])/i); if(m) return POINT_RULES.levels[`Level ${m[1]}`]||0;
+  if(/dtm/i.test(t)) return POINT_RULES.levels["DTM"]; return 0;
+}
+function contestModifiers(base, cell){
+  let pts=base; const x=(cell||"").toLowerCase();
+  if(x.includes("area")) pts+=1;
+  if(x.includes("division")) pts+=2;
+  if(x.includes("district")) pts+=3;
+  if(x.includes("dtac podium")) pts+=1;
+  if(x.includes("arabic")) pts*=0.5;
+  return pts;
+}
+function scoreContestTextUniq(txt){
+  if(!txt) return 0;
+  const t=txt.toLowerCase();
+  let pts=0;
+  // placement wins override base if larger
+  if(t.includes("1st")) pts=Math.max(pts, contestModifiers(POINT_RULES.placement["1st"], txt));
+  if(t.includes("2nd")) pts=Math.max(pts, contestModifiers(POINT_RULES.placement["2nd"], txt));
+  if(t.includes("3rd")) pts=Math.max(pts, contestModifiers(POINT_RULES.placement["3rd"], txt));
+  // chair/role taker
+  if(t.includes("chair")) pts=Math.max(pts, contestModifiers(POINT_RULES.contestBase["Contest Chair"], txt));
+  if(t.includes("role")&&t.includes("taker")) pts=Math.max(pts, contestModifiers(POINT_RULES.contestBase["Contest Role Taker"], txt));
+  // registrations
+  ["International","Humorous","Evaluation","Table Topics"].forEach(sec=>{
+    if(t.includes(sec.toLowerCase())) pts += contestModifiers(POINT_RULES.contestBase[sec], txt);
+  });
+  return pts;
+}
+function scoreExternalText(txt){
+  if(!txt) return 0; const t=txt.toLowerCase();
+  for(const [k,v] of Object.entries(POINT_RULES.external)){
+    if(t.includes(k.toLowerCase())) return v;
+  }
+  if(t.includes("outside speech")) return POINT_RULES.external["Outside Speech"];
+  if(t.includes("ylp")) return POINT_RULES.external["YLP Volunteer"];
+  if(t.includes("newsletter")) return POINT_RULES.external["Newsletter Editor"];
+  if(t.includes("dual member")) return POINT_RULES.external["Dual Member (per club)"];
+  return 0;
+}
+
+/* ---------- Init ---------- */
+(async function init(){
+  [summaryData,totalData,eaData,roleData,lmrData,spData,evData,lvlData,awdData,excomData,contestData,ttData] =
+    await Promise.all(Object.values(SHEETS).map(fetchCSV));
+  buildLeaderboard();
+  buildClubProgress(); // compute once using full dataset
+})();
+
+/* ---------- Leaderboard ---------- */
+function buildLeaderboard(){
+  if(dtLeaderboard) dtLeaderboard.destroy();
+  dtLeaderboard = $("#leaderboard").DataTable({
+    data: summaryData.filter(r=>r.Name && r.Points),
+    columns: [
+      {title:"Name", data:"Name"},
+      {title:"Points", data:"Points", render:d=>parseInt(d||0)}
+    ],
+    order:[[1,"desc"]],
+    pageLength:25
+  });
+  $('#leaderboard tbody').on('click','tr',function(){
+    const row = dtLeaderboard.row(this).data();
+    if(row?.Name) openProfile(row.Name);
+  });
+}
+
+/* ---------- Profile ---------- */
+function openProfile(member){
+  currentMember = member;
+  document.getElementById("profileName").textContent = member;
+  document.getElementById("avatar").textContent = initials(member);
+
+  const tRow = totalData.find(r=>r.Name===member);
+  const totalPointsAll = tRow ? parseInt(tRow.Points||0) : 0;
+  document.getElementById("profileSub").textContent = `Official Total Points: ${totalPointsAll}`;
+  document.getElementById("totalPointsAll").textContent = totalPointsAll;
+
+  // Role dropdown for this member
+  const roleSet = new Set();
+  [roleData,lmrData].forEach(sheet=>{
+    sheet.filter(r=>r.Name===member).forEach(r=>Object.values(r).slice(2).forEach(v=>{ if(v) roleSet.add(v); }));
+  });
+  if (spData.find(r=>r.Name===member && Object.values(r).slice(2).some(v=>v))) roleSet.add("Speaker");
+  if (evData.find(r=>r.Name===member && Object.values(r).slice(2).some(v=>v==="TRUE"))) roleSet.add("Evaluator");
+  const sel = document.getElementById("roleFilter");
+  sel.innerHTML = `<option value="">All roles</option>`;
+  [...roleSet].sort().forEach(r=>{
+    const o=document.createElement("option"); o.value=r; o.textContent=r; sel.appendChild(o);
+  });
+
+  // Reset dates
+  document.getElementById("startDate").value="";
+  document.getElementById("endDate").value="";
+
+  recomputeAndRender();
+}
+
+/* ---------- Recompute with filters ---------- */
+function recomputeAndRender(){
+  if(!currentMember) return;
+  const roleFilter = document.getElementById("roleFilter").value;
+  const sd = document.getElementById("startDate").value;
+  const ed = document.getElementById("endDate").value;
+  const startDate = sd ? new Date(sd) : null;
+  const endDate   = ed ? new Date(ed) : null;
+
+  const eaRow = eaData.find(r=>r.Name===currentMember)||{};
+  const rtRow = roleData.find(r=>r.Name===currentMember)||{};
+  const lmrRow= lmrData.find(r=>r.Name===currentMember)||{};
+  const spRow = spData.find(r=>r.Name===currentMember)||{};
+  const evRow = evData.find(r=>r.Name===currentMember)||{};
+  const lvlRow= lvlData.find(r=>r.Name===currentMember)||{};
+  const awdRow= awdData.find(r=>r.Name===currentMember)||{};
+  const exRow = excomData.find(r=>r.Name===currentMember)||{};
+  const ctRow = contestData.find(r=>r.Name===currentMember)||{};
+  const ttRow = ttData.find(r=>r.Name===currentMember)||{};
+
+  const dateKeys = dateKeysOf(eaRow);
+  const within = d=>{ const dt=safeDate(d); if(!dt) return true; if(startDate && dt<startDate) return false; if(endDate && dt>endDate) return false; return true; };
+
+  let meetingsCounted=0, filteredPoints=0; const distinctRoles=new Set();
+  const categoryPts = {"Early Attendance":0,"Role Taking":0,"Last Minute Roles":0,"Speeches":0,"Evaluations":0,"Level Completions":0,"Awards":0,"ExCom & Sub.":0,"Contests":0,"External/Other/TT":0};
+
+  const detailRows=[];
+
+  for(const d of dateKeys){
+    const att = val(eaRow,d);
+    const attended = !!(att && att!=="A" && att!=="E");
+    if(!attended) continue;
+    if(!within(d)) continue;
+
+    const role = val(rtRow,d)||"";
+    const lmr  = val(lmrRow,d)||"";
+    const sp   = val(spRow,d)||"";
+    const ev   = val(evRow,d)||"";
+    const lvl  = val(lvlRow,d)||"";
+    const awd  = val(awdRow,d)||"";
+
+    // role filter matching
+    const rolesThisDate=[];
+    if(role) rolesThisDate.push(role);
+    if(lmr) rolesThisDate.push(lmr);
+    if(sp) rolesThisDate.push("Speaker");
+    if(ev==="TRUE") rolesThisDate.push("Evaluator");
+    if(roleFilter && !rolesThisDate.includes(roleFilter)) continue;
+
+    meetingsCounted++;
+
+    // Early attendance (weighted)
+    const eaPts = POINT_RULES.earlyAttendance(att); filteredPoints+=eaPts; categoryPts["Early Attendance"]+=eaPts;
+
+    // Roles
+    const rPts = scoreRoleName(role); filteredPoints+=rPts; categoryPts["Role Taking"]+=rPts; if(role) distinctRoles.add(role);
+    const lPts = scoreRoleName(lmr);  filteredPoints+=lPts; categoryPts["Last Minute Roles"]+=lPts; if(lmr) distinctRoles.add(lmr);
+
+    // Speech
+    if(sp){ filteredPoints+=POINT_RULES.speech; categoryPts["Speeches"]+=POINT_RULES.speech; distinctRoles.add("Speaker"); }
+    // Evaluation
+    if(ev==="TRUE"){ filteredPoints+=POINT_RULES.evaluationTrue; categoryPts["Evaluations"]+=POINT_RULES.evaluationTrue; distinctRoles.add("Evaluator"); }
+
+    // Awards & Levels per meeting/date if present
+    const aPts=scoreAwardText(awd); filteredPoints+=aPts; categoryPts["Awards"]+=aPts;
+    const lvPts=scoreLevelText(lvl); filteredPoints+=lvPts; categoryPts["Level Completions"]+=lvPts;
+
+    // detail row (keep columns minimal to avoid DataTables param errors)
+    detailRows.push({
+      Date:d,
+      Attendance:att||"",
+      Roles:role||"",
+      Speech: sp ? "Yes":"", 
+      Evaluation: ev==="TRUE" ? "Yes":""
+    });
+  }
+
+  // ----- Once-per-year/event categories (dedup by unique text across date columns within the filter range) -----
+  function uniqNonEmptyVals(row){
+    const set=new Set(); for(const k of Object.keys(row).slice(2)){
+      if(!within(k)) continue; const v=row[k]; if(v){ set.add((v+"").trim()); }
+    }
+    return [...set];
+  }
+
+  // ExCom & Sub. (once per role)
+  const exUniq = uniqNonEmptyVals(exRow);
+  let exPtsTotal=0;
+  exUniq.forEach(txt=>{
+    // map by keywords in excom rules; fallback 0 if unknown
+    const t=txt.toLowerCase();
+    let mapped=0;
+    for(const [k,v] of Object.entries(POINT_RULES.excom)){ if(t.includes(k.toLowerCase())) { mapped=v; break; } }
+    exPtsTotal += mapped;
+  });
+  filteredPoints += exPtsTotal; categoryPts["ExCom & Sub."] += exPtsTotal;
+
+  // Contests (once per event description)
+  const ctUniq = uniqNonEmptyVals(ctRow);
+  let ctPts=0; ctUniq.forEach(txt=>{ ctPts += scoreContestTextUniq(txt); });
+  filteredPoints += ctPts; categoryPts["Contests"] += ctPts;
+
+  // External/Other/TT (once per event description)
+  const ttUniq = uniqNonEmptyVals(ttRow);
+  let ttPts=0; ttUniq.forEach(txt=>{ ttPts += scoreExternalText(txt); });
+  filteredPoints += ttPts; categoryPts["External/Other/TT"] += ttPts;
+
+  // KPIs
+  document.getElementById("meetingsCount").textContent = meetingsCounted;
+  document.getElementById("filteredPoints").textContent = Math.round(filteredPoints);
+  document.getElementById("distinctRoles").textContent = distinctRoles.size;
+
+  // charts
+  drawCategoryChart(categoryPts);
+  drawProgressChart(detailRows);
+
+  // details table (columns trimmed — no ExCom column -> fixes DataTables warning)
+  if(dtDetails) dtDetails.destroy();
+  dtDetails = $("#detailTable").DataTable({
+    data:detailRows,
+    columns:[
+      {title:"Date", data:"Date"},
+      {title:"Attendance", data:"Attendance"},
+      {title:"Roles", data:"Roles"},
+      {title:"Speech", data:"Speech"},
+      {title:"Evaluation", data:"Evaluation"}
+    ],
+    order:[[0,"asc"]],
+    pageLength:25,
+    searching:false
+  });
+}
+
+/* ---------- Charts ---------- */
+function drawCategoryChart(tally){
+  const labels=Object.keys(tally); const values=labels.map(k=>tally[k]);
+  if(chartCategory) chartCategory.destroy();
+  chartCategory = new Chart(document.getElementById("categoryChart").getContext("2d"),{
+    type:"bar",
+    data:{labels,datasets:[{label:"Weighted Points (Filtered)",data:values}]},
+    options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}
+  });
+}
+function drawProgressChart(detailRows){
+  const byDate={};
+  for(const r of detailRows){
+    let pts=0;
+    pts+=POINT_RULES.earlyAttendance(r.Attendance);
+    pts+=scoreRoleName(r.Roles);
+    if(r.Speech==="Yes") pts+=POINT_RULES.speech;
+    if(r.Evaluation==="Yes") pts+=POINT_RULES.evaluationTrue;
+    byDate[r.Date]=(byDate[r.Date]||0)+pts;
+  }
+  const dates=Object.keys(byDate).sort((a,b)=>{const da=safeDate(a),db=safeDate(b); return (da&&db)?da-db:a.localeCompare(b);});
+  let cum=0; const series=dates.map(d=>cum+=byDate[d]);
+  if(chartProgress) chartProgress.destroy();
+  chartProgress = new Chart(document.getElementById("progressChart").getContext("2d"),{
+    type:"line",
+    data:{labels:dates,datasets:[{label:"Cumulative Weighted Points (Filtered)",data:series,fill:false,tension:.25}]},
+    options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}
+  });
+}
+
+/* ---------- Club-wide cumulative (all members) ---------- */
+function buildClubProgress(){
+  // Sum meeting-level categories across all members per date (EA, Roles, LMR, Speech, Evaluation, Awards, Levels)
+  const allDatesSet=new Set();
+  eaData.forEach(r=>dateKeysOf(r).forEach(k=>allDatesSet.add(k)));
+  const dates=[...allDatesSet].sort((a,b)=>{const da=safeDate(a),db=safeDate(b); return (da&&db)?da-db:a.localeCompare(b);});
+
+  const perDateSum={}; // date -> total points
+  const nameIndex = new Map(); // name -> rows by sheet for quick access per member
+  function indexByName(sheet){ const m=new Map(); sheet.forEach(r=>m.set(r.Name,r)); return m; }
+  const idxEA=indexByName(eaData), idxRT=indexByName(roleData), idxLMR=indexByName(lmrData), idxSP=indexByName(spData), idxEV=indexByName(evData), idxLV=indexByName(lvlData), idxAW=indexByName(awdData);
+
+  // iterate each member found in EA
+  eaData.forEach(memberRow=>{
+    const name=memberRow.Name; if(!name) return;
+    dates.forEach(d=>{
+      const att = val(idxEA.get(name),d);
+      const attended = !!(att && att!=="A" && att!=="E");
+      if(!attended) return;
+      let pts=0;
+      pts += POINT_RULES.earlyAttendance(att);
+      pts += scoreRoleName(val(idxRT.get(name)||{},d)||"");
+      pts += scoreRoleName(val(idxLMR.get(name)||{},d)||"");
+      if(val(idxSP.get(name)||{},d)) pts += POINT_RULES.speech;
+      if(val(idxEV.get(name)||{},d)==="TRUE") pts += POINT_RULES.evaluationTrue;
+      pts += scoreAwardText(val(idxAW.get(name)||{},d)||"");
+      pts += scoreLevelText(val(idxLV.get(name)||{},d)||"");
+      perDateSum[d]=(perDateSum[d]||0)+pts;
+    });
+  });
+
+  const labels=dates;
+  let cum=0; const series=labels.map(d=>cum+= (perDateSum[d]||0));
+  if(chartClub) chartClub.destroy();
+  chartClub = new Chart(document.getElementById("clubProgressChart").getContext("2d"),{
+    type:"line",
+    data:{labels,datasets:[{label:"Club Cumulative Weighted Points",data:series,fill:false,tension:.25}]},
+    options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}
+  });
+
+  // Note: annual/event-only categories excluded from club timeline to avoid artificial spikes.
+  const clubTotalAll = summaryData.reduce((a,r)=>a+(parseInt(r.Points||0)||0),0);
+  document.getElementById("clubTotalsNote").textContent = `Note: Club curve shows meeting-level points only. Official club total (all categories): ${clubTotalAll}.`;
+}
+
+/* ---------- Listeners ---------- */
+document.getElementById("roleFilter").addEventListener("change",recomputeAndRender);
+document.getElementById("startDate").addEventListener("change",recomputeAndRender);
+document.getElementById("endDate").addEventListener("change",recomputeAndRender);
+</script>
+</body>
+</html>
