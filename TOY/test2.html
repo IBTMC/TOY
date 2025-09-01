@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Toastmasters Dashboard</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+    h1 { color: #004165; }
+    .kpi { display: inline-block; margin: 10px; padding: 15px; background: white; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1);}
+    .filters { margin: 20px 0; }
+    select, input { margin: 5px; padding: 5px; }
+    canvas { margin: 20px 0; background: white; padding: 10px; border-radius: 8px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white;}
+    th, td { padding: 8px; border: 1px solid #ccc; }
+    th { background: #004165; color: white; }
+  </style>
+</head>
+<body>
+  <h1>Toastmasters Dashboard</h1>
+
+  <div class="filters">
+    <label>Select member:</label>
+    <select id="memberSelect"><option>— Select —</option></select>
+    <label>Filter by role:</label>
+    <select id="roleSelect"><option>All roles</option></select>
+  </div>
+
+  <div id="kpis">
+    <div class="kpi"><strong>Meetings Counted</strong><br><span id="meetingsCount">0</span></div>
+    <div class="kpi"><strong>Total Points</strong><br><span id="totalPoints">0</span></div>
+    <div class="kpi"><strong>Distinct Roles</strong><br><span id="distinctRoles">0</span></div>
+  </div>
+
+  <h2>Category Breakdown</h2>
+  <canvas id="breakdownChart"></canvas>
+
+  <h2>Cumulative Progress</h2>
+  <canvas id="progressChart"></canvas>
+
+  <h2>Leaderboard (Club)</h2>
+  <table id="leaderboard">
+    <thead><tr><th>Name</th><th>Points</th></tr></thead>
+    <tbody></tbody>
+  </table>
+
+<script>
+const sheetUrls = {
+  "Summary": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=1556398249&single=true&output=csv",
+  "Total": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=1939085341&single=true&output=csv",
+  "Early Attendance": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=1928408168&single=true&output=csv",
+  "Role Taking": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=23380471&single=true&output=csv",
+  "Speeches": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=170161438&single=true&output=csv",
+  "Evaluations": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRz-oWABE-EvDz6gal8sPWQ8bfWdikK57YJLPtfVHVrUA9yCHOzBRgXgJMpizQKMlAVsO9Ud4XUlflx/pub?gid=335593996&single=true&output=csv"
+};
+
+let sheets = {};
+let members = [];
+let roles = new Set();
+
+function loadSheets() {
+  let loaded = 0, total = Object.keys(sheetUrls).length;
+  for (let [name, url] of Object.entries(sheetUrls)) {
+    Papa.parse(url, {
+      download: true, header: true, skipEmptyLines: true,
+      complete: function(results) {
+        sheets[name] = results.data;
+        loaded++;
+        if (loaded === total) initDashboard();
+      }
+    });
+  }
+}
+
+function initDashboard() {
+  // Populate members from Total sheet
+  members = sheets["Total"].map(r => r.Name).filter(n => n && n !== "Name");
+  let memberSelect = document.getElementById("memberSelect");
+  members.forEach(m => {
+    let opt = document.createElement("option"); opt.text = m; opt.value = m;
+    memberSelect.add(opt);
+  });
+
+  // Collect roles
+  sheets["Role Taking"].forEach(r => {
+    Object.values(r).forEach(val => { if (val && val !== "Name" && val !== "Points") roles.add(val); });
+  });
+  sheets["Speeches"].forEach(r => { if (Object.values(r).some(v => v && v.trim())) roles.add("Speaker"); });
+  sheets["Evaluations"].forEach(r => { if (Object.values(r).some(v => v === "TRUE")) roles.add("Evaluator"); });
+  let roleSelect = document.getElementById("roleSelect");
+  roles.forEach(role => { let opt = document.createElement("option"); opt.text = role; opt.value = role; roleSelect.add(opt); });
+
+  // Leaderboard
+  let tbody = document.querySelector("#leaderboard tbody");
+  sheets["Summary"].forEach(r => {
+    if (r.Name && r.Points) {
+      let tr = document.createElement("tr");
+      tr.innerHTML = `<td>${r.Name}</td><td>${r.Points}</td>`;
+      tbody.appendChild(tr);
+    }
+  });
+
+  document.getElementById("memberSelect").addEventListener("change", updateDashboard);
+  document.getElementById("roleSelect").addEventListener("change", updateDashboard);
+}
+
+function updateDashboard() {
+  let member = document.getElementById("memberSelect").value;
+  if (member === "— Select —") return;
+
+  let roleFilter = document.getElementById("roleSelect").value;
+
+  // Total Points
+  let totalRow = sheets["Total"].find(r => r.Name === member);
+  let totalPoints = totalRow ? +totalRow.Points || 0 : 0;
+  document.getElementById("totalPoints").innerText = totalPoints;
+
+  // Meetings Counted (Early Attendance, col3+ non-empty not A/E)
+  let meetings = 0;
+  sheets["Early Attendance"].forEach(r => {
+    if (r.Name === member) {
+      Object.values(r).slice(2).forEach(val => {
+        if (val && val !== "A" && val !== "E") meetings++;
+      });
+    }
+  });
+  document.getElementById("meetingsCount").innerText = meetings;
+
+  // Distinct Roles
+  let distinct = new Set();
+  sheets["Role Taking"].forEach(r => {
+    if (r.Name === member) {
+      Object.values(r).slice(2).forEach(val => { if (val) distinct.add(val); });
+    }
+  });
+  sheets["Speeches"].forEach(r => { if (r.Name === member && Object.values(r).slice(2).some(v => v)) distinct.add("Speaker"); });
+  sheets["Evaluations"].forEach(r => { if (r.Name === member && Object.values(r).slice(2).some(v => v === "TRUE")) distinct.add("Evaluator"); });
+  document.getElementById("distinctRoles").innerText = distinct.size;
+
+  // Charts
+  drawBreakdownChart(totalRow);
+  drawProgressChart(member);
+}
+
+function drawBreakdownChart(row) {
+  if (!row) return;
+  let labels = Object.keys(row).slice(2);
+  let values = labels.map(k => +row[k] || 0);
+  let ctx = document.getElementById("breakdownChart").getContext("2d");
+  if (window.breakdownChart) window.breakdownChart.destroy();
+  window.breakdownChart = new Chart(ctx, {
+    type: 'pie',
+    data: { labels: labels, datasets: [{ data: values }] }
+  });
+}
+
+function drawProgressChart(member) {
+  let dates = [], counts = [];
+  let rows = sheets["Early Attendance"].find(r => r.Name === member);
+  if (!rows) return;
+  let cols = Object.keys(rows).slice(2);
+  cols.forEach((c,i) => {
+    let val = rows[c];
+    if (val && val !== "A" && val !== "E") {
+      dates.push(c);
+      counts.push(i+1);
+    }
+  });
+  let ctx = document.getElementById("progressChart").getContext("2d");
+  if (window.progressChart) window.progressChart.destroy();
+  window.progressChart = new Chart(ctx, {
+    type: 'line',
+    data: { labels: dates, datasets: [{ label:"Meetings", data: counts, fill:false, borderColor:"#004165"}]}
+  });
+}
+
+loadSheets();
+</script>
+</body>
+</html>
