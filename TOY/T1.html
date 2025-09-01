@@ -82,9 +82,15 @@
     </div>
 
     <!-- Extended Progress Chart -->
-    <div class="bg-white p-4 rounded shadow">
+    <div class="bg-white p-4 rounded shadow mb-6">
       <h2 class="text-lg font-bold mb-2">Extended Progress (All Categories)</h2>
       <canvas id="extendedProgressChart"></canvas>
+    </div>
+
+    <!-- Meeting Summaries -->
+    <div class="bg-white p-4 rounded shadow">
+      <h2 class="text-lg font-bold mb-2">Meeting Summaries</h2>
+      <table id="meetingSummaries" class="display w-full"></table>
     </div>
   </main>
 
@@ -114,6 +120,7 @@
 
     let detailTable;
     let leaderboardTable;
+    let meetingSummariesTable;
     let categoryChart;
     let progressChart;
     let extendedProgressChart;
@@ -220,6 +227,37 @@
       });
     }
 
+    async function loadMeetingSummaries() {
+      const allData = [];
+      for (let [key, sheetName] of Object.entries(SHEETS)) {
+        if (key === 'summary' || key === 'total') continue;
+        const data = await fetchSheet(sheetName);
+        data.forEach(r => {
+          if (r.Date) {
+            allData.push({
+              Date: r.Date,
+              Name: r.Name,
+              Category: sheetName,
+              Role: r.Role || r.Speech || r.Activity || '',
+              Points: r.Points || 1
+            });
+          }
+        });
+      }
+      if (meetingSummariesTable) meetingSummariesTable.destroy();
+      meetingSummariesTable = $('#meetingSummaries').DataTable({
+        data: allData,
+        order: [[0, 'asc']],
+        columns: [
+          { title: "Date", data: "Date" },
+          { title: "Name", data: "Name" },
+          { title: "Category", data: "Category" },
+          { title: "Role/Activity", data: "Role" },
+          { title: "Points", data: "Points" }
+        ]
+      });
+    }
+
     document.addEventListener("DOMContentLoaded", async () => {
       await loadSummary();
       const memberSelect = document.getElementById("memberSelect");
@@ -227,6 +265,7 @@
       await loadTotal(initialMember);
       await loadDetail(SHEETS.roles, initialMember);
       await loadExtendedProgress(initialMember);
+      await loadMeetingSummaries();
 
       memberSelect.addEventListener("change", async e => {
         const member = e.target.value;
