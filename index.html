@@ -14,6 +14,24 @@
   <div class="container">
     <h1>Toastmasters Club Dashboard</h1>
 
+    <!-- Filters -->
+    <section class="filters">
+      <label for="memberFilter">Member:</label>
+      <select id="memberFilter"></select>
+
+      <label for="roleFilter">Role:</label>
+      <select id="roleFilter"></select>
+
+      <label for="startDate">Start Date:</label>
+      <input type="date" id="startDate">
+
+      <label for="endDate">End Date:</label>
+      <input type="date" id="endDate">
+
+      <button id="applyFilters">Apply Filters</button>
+      <button id="resetFilters">Reset</button>
+    </section>
+
     <!-- Leaderboard -->
     <section>
       <h2>Leaderboard</h2>
@@ -23,8 +41,6 @@
     <!-- Member Progress -->
     <section>
       <h2>Member Progress</h2>
-      <label for="memberSelect">Select Member:</label>
-      <select id="memberSelect"></select>
       <canvas id="progressChart"></canvas>
     </section>
 
