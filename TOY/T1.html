@@ -28,7 +28,7 @@
   header .brand{display:flex;align-items:center;gap:12px}
   header img{height:44px; background:#fff; border-radius:8px; padding:6px}
   header h1{font-size:20px; margin:0; font-weight:700}
-  .container{max-width:1200px; margin:24px auto; padding:0 16px}
+  .container{max-width:1220px; margin:24px auto; padding:0 16px}
 
   .filters, .kpis, .charts, .cards, .tabs {margin-top:18px}
   .panel{
@@ -42,7 +42,7 @@
   .kpi .value{font-size:28px;font-weight:800;color:var(--tm-navy)}
 
   .filters .row{display:flex;flex-wrap:wrap;gap:10px}
-  .filters .row > div{flex:1 1 180px}
+  .filters .row > div{flex:1 1 220px}
   label{display:block;font-size:12px;color:#6b7280;margin-bottom:6px}
   select,input[type="date"]{width:100%;padding:10px;border:1px solid #e5e7eb;border-radius:10px;background:#fff}
 
@@ -170,18 +170,18 @@ const SHEET_ID = "19x7OzxLlfG5YarEgksoX-drLaf12Ci98JpYkBvQpoMI";
 const DETAIL_TABS = ["Role Taking","Speeches","Evaluations","Level Completions","Awards","External","Other","Last Minute Roles"];
 const CATEGORY_KEYS = ["Early Attendance","Role Taking","Speeches","Evaluations","Level Completions","Awards","ExCom & Sub.","Contests","External","Other","Last Minute Roles"];
 
-let cache = {}; // per-sheet cache to minimize calls
+let cache = {}; // per-sheet cache
 
-// --- robust GViz fetch and parse ---
+// ---------------- GViz fetch ----------------
 async function fetchGViz(sheetName){
   if(cache[sheetName]) return cache[sheetName];
   const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?sheet=${encodeURIComponent(sheetName)}&tq=select%20*`;
   const res = await fetch(url);
   const txt = await res.text();
 
-  // Extract JSON safely
+  // Extract JSON
   const m = txt.match(/google\.visualization\.Query\.setResponse\(([\s\S]*?)\);/);
-  if(!m){ showError(`Failed to parse GViz for sheet "${sheetName}".`); return []; }
+  if(!m){ showError(`Failed to parse GViz for "${sheetName}".`); return []; }
   const json = JSON.parse(m[1]);
 
   const cols = (json.table.cols || []).map((c,i)=> c.label || `col${i}`);
@@ -192,6 +192,7 @@ async function fetchGViz(sheetName){
     });
     return o;
   });
+
   cache[sheetName] = rows;
   return rows;
 }
@@ -205,17 +206,15 @@ function clearError(){
   document.getElementById('errorBox').classList.add('hidden');
 }
 
-// --- utilities ---
+// ---------------- helpers ----------------
 function parseHeaderDate(label){
-  // try native
   const d1 = new Date(label);
   if(!isNaN(d1)) return d1;
-  // try dd-MMM-yy (e.g., 12-Jul-25)
   const m = String(label).trim().match(/^(\d{1,2})[-\/\s]([A-Za-z]{3})[-\/\s](\d{2,4})$/);
   if(m){
     const [_,dd,mon,yy] = m;
-    const months = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
-    const year = (+yy < 100) ? 2000 + (+yy) : +yy;
+    const months={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+    const year=(+yy<100)?2000+(+yy):+yy;
     return new Date(year, months[mon], +dd);
   }
   return null;
@@ -226,61 +225,122 @@ function inRange(date, start, end){
   if(end && date > end) return false;
   return true;
 }
-function toLabel(d){
-  return d.toISOString().slice(0,10);
+function toLabel(d){ return d.toISOString().slice(0,10); }
+
+function cleanedRows(rows){
+  // Drop row 2 (meeting number row) whose Name is empty
+  return rows.filter(r => r.Name && String(r.Name).trim() !== "");
 }
 
-// --- member + role options ---
+function dateColumnsFrom(sheetRows){
+  const sample = sheetRows[0] || {};
+  return Object.keys(sample).filter(k => k!=="Name" && k!=="Points" && parseHeaderDate(k));
+}
+
+// ---------------- populate UI ----------------
 async function populateMembers(){
   const total = await fetchGViz("Total");
   const members = total.map(r=>r.Name).filter(Boolean);
   const sel = document.getElementById('memberSelect');
   sel.innerHTML = members.map(m=>`<option value="${m}">${m}</option>`).join('');
 }
+
 async function populateRoleFilter(){
-  const roles = await fetchGViz("Role Taking");
   const set = new Set();
-  roles.forEach(row=>{
+  // Roles from Role Taking (cell values, rows >= 3)
+  const roleRows = cleanedRows(await fetchGViz("Role Taking"));
+  roleRows.forEach(row=>{
     Object.entries(row).forEach(([k,v])=>{
-      if(k==="Name" || k==="Points") return;
+      if(k==="Name"||k==="Points") return;
       if(v && String(v).trim()) set.add(String(v).trim());
     });
   });
+
+  // "Speaker" if any non-empty in Speeches
+  const speechRows = cleanedRows(await fetchGViz("Speeches"));
+  let hasSpeaker=false;
+  speechRows.forEach(row=>{
+    Object.entries(row).forEach(([k,v])=>{
+      if(k==="Name"||k==="Points") return;
+      if(v && String(v).trim()) hasSpeaker=true;
+    });
+  });
+  if(hasSpeaker) set.add("Speaker");
+
+  // "Evaluator" if any TRUE in Evaluations
+  const evalRows = cleanedRows(await fetchGViz("Evaluations"));
+  let hasEvaluator=false;
+  evalRows.forEach(row=>{
+    Object.entries(row).forEach(([k,v])=>{
+      if(k==="Name"||k==="Points") return;
+      const val = (typeof v === 'string') ? v.trim().toUpperCase() : v;
+      if(val===true || val==="TRUE") hasEvaluator=true;
+    });
+  });
+  if(hasEvaluator) set.add("Evaluator");
+
   const sel = document.getElementById('roleFilter');
   sel.innerHTML = `<option value="__ALL__">All roles</option>` + [...set].sort().map(r=>`<option>${r}</option>`).join('');
 }
 
-// --- KPIs ---
+// ---------------- KPIs ----------------
 async function updateKPIs(member, start, end, roleFilter){
-  // meetings counted = distinct date columns across detail tabs within range
-  const roleSheet = await fetchGViz("Role Taking");
-  const headers = Object.keys(roleSheet[0] || {}).filter(k=>k!=="Name" && k!=="Points");
-  const dates = headers.map(parseHeaderDate).filter(Boolean);
-  const meetingsCounted = dates.filter(d=>inRange(d,start,end)).length;
-  document.getElementById('kpiMeetings').textContent = meetingsCounted || 0;
+  // meetings counted = distinct date columns in Role Taking that fall within range
+  const roleRows = await fetchGViz("Role Taking");
+  const headers = dateColumnsFrom(roleRows);
+  const meetings = headers.map(parseHeaderDate).filter(Boolean).filter(d=>inRange(d,start,end)).length;
+  document.getElementById('kpiMeetings').textContent = meetings || 0;
 
-  // total points = from Total sheet 'Points'
+  // total points from Total
   const total = await fetchGViz("Total");
   const row = total.find(r=>r.Name===member);
-  const totalPts = row && row.Points ? Number(row.Points) : 0;
-  document.getElementById('kpiPoints').textContent = totalPts;
+  const points = row && row.Points ? Number(row.Points) : 0;
+  document.getElementById('kpiPoints').textContent = points;
 
-  // distinct roles (filtered by date and optional role)
-  const roleRow = roleSheet.find(r=>r.Name===member) || {};
+  // distinct roles for member, within filters
+  const memberRoleRow = cleanedRows(await fetchGViz("Role Taking")).find(r=>r.Name===member) || {};
   const distinct = new Set();
-  Object.entries(roleRow).forEach(([k,v])=>{
-    if(!v || k==="Name"||k==="Points") return;
+
+  Object.entries(memberRoleRow).forEach(([k,v])=>{
+    if(k==="Name"||k==="Points") return;
     const d = parseHeaderDate(k);
     if(!d) return;
     if(!inRange(d,start,end)) return;
-    const val = String(v).trim();
-    if(roleFilter && roleFilter!=="__ALL__" && val !== roleFilter) return;
+    const val = String(v||"").trim();
+    if(!val) return;
+    if(roleFilter && roleFilter!=="__ALL__" && roleFilter!=="Speaker" && roleFilter!=="Evaluator" && val!==roleFilter) return;
     distinct.add(val);
   });
+
+  // include Speaker/Evaluator if filtering or present in range
+  if(roleFilter==="Speaker" || roleFilter==="__ALL__"){
+    const speeches = cleanedRows(await fetchGViz("Speeches")).find(r=>r.Name===member) || {};
+    let spoke=false;
+    Object.entries(speeches).forEach(([k,v])=>{
+      if(k==="Name"||k==="Points") return;
+      const d=parseHeaderDate(k); if(!d) return;
+      if(!inRange(d,start,end)) return;
+      if(v && String(v).trim()) spoke=true;
+    });
+    if(spoke) distinct.add("Speaker");
+  }
+  if(roleFilter==="Evaluator" || roleFilter==="__ALL__"){
+    const evals = cleanedRows(await fetchGViz("Evaluations")).find(r=>r.Name===member) || {};
+    let evaled=false;
+    Object.entries(evals).forEach(([k,v])=>{
+      if(k==="Name"||k==="Points") return;
+      const d=parseHeaderDate(k); if(!d) return;
+      if(!inRange(d,start,end)) return;
+      const val=(typeof v==='string')?v.trim().toUpperCase():v;
+      if(val===true || val==="TRUE") evaled=true;
+    });
+    if(evaled) distinct.add("Evaluator");
+  }
+
   document.getElementById('kpiRoles').textContent = distinct.size;
 }
 
-// --- Leaderboard ---
+// ---------------- Leaderboard ----------------
 async function buildLeaderboard(){
   const total = await fetchGViz("Total");
   const data = total.filter(r=>r.Name).map(r=>({Name:r.Name, Points:Number(r.Points||0)}));
@@ -297,12 +357,10 @@ async function buildLeaderboard(){
   }
 }
 
-// --- Raw table tab ---
+// ---------------- Raw table tab ----------------
 async function loadDetailTable(sheetName, member){
-  const rows = await fetchGViz(sheetName);
-  // drop the "second header row" if present (Name empty)
-  const cleaned = rows.filter(r=>r.Name && String(r.Name).trim() !== "");
-  const filtered = member ? cleaned.filter(r=>r.Name===member) : cleaned;
+  const rows = cleanedRows(await fetchGViz(sheetName));
+  const filtered = member ? rows.filter(r=>r.Name===member) : rows;
 
   if ($.fn.DataTable.isDataTable("#detailTable")) {
     $("#detailTable").DataTable().destroy();
@@ -316,18 +374,19 @@ async function loadDetailTable(sheetName, member){
   });
 }
 
-// --- Category Breakdown (bar) from Total row categories ---
+// ---------------- Charts ----------------
+const CATEGORY_KEYS = ["Early Attendance","Role Taking","Speeches","Evaluations","Level Completions","Awards","ExCom & Sub.","Contests","External","Other","Last Minute Roles"];
+let categoryChart, roleChart, cumulativeChart;
+
 function pickCategories(totalRow){
-  const data = [];
+  const items=[];
   CATEGORY_KEYS.forEach(k=>{
     if(k in totalRow){
-      let v = Number(totalRow[k] || 0);
-      data.push({label:k, value:v});
+      items.push({label:k, value:Number(totalRow[k]||0)});
     }
   });
-  return data;
+  return items;
 }
-let categoryChart, roleChart, cumulativeChart;
 
 async function drawCategoryChart(member){
   const total = await fetchGViz("Total");
@@ -338,24 +397,52 @@ async function drawCategoryChart(member){
   categoryChart = new Chart(ctx, {
     type:"bar",
     data:{ labels: items.map(i=>i.label), datasets:[{label:"Points", data: items.map(i=>i.value)}] },
-    options:{ responsive:true, plugins:{legend:{display:false}} }
+    options:{ responsive:true, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}} }
   });
 }
 
-// --- Role Breakdown Pie (member, date+role filters respected) ---
+// Role Breakdown Pie — respects date & role filters
 async function drawRoleChart(member, start, end, roleFilter){
-  const roleSheet = await fetchGViz("Role Taking");
-  const row = roleSheet.find(r=>r.Name===member) || {};
   const counts={};
-  Object.entries(row).forEach(([k,v])=>{
-    if(!v||k==="Name"||k==="Points") return;
-    const d = parseHeaderDate(k);
-    if(!d) return;
+
+  // Role Taking specific roles
+  const roleRow = cleanedRows(await fetchGViz("Role Taking")).find(r=>r.Name===member) || {};
+  Object.entries(roleRow).forEach(([k,v])=>{
+    if(k==="Name"||k==="Points") return;
+    const d=parseHeaderDate(k); if(!d) return;
     if(!inRange(d,start,end)) return;
-    const val = String(v).trim();
-    if(roleFilter && roleFilter!=="__ALL__" && val !== roleFilter) return;
-    counts[val] = (counts[val]||0)+1;
+    const val=String(v||"").trim(); if(!val) return;
+    if(roleFilter && roleFilter!=="__ALL__" && roleFilter!=="Speaker" && roleFilter!=="Evaluator" && val!==roleFilter) return;
+    counts[val]=(counts[val]||0)+1;
   });
+
+  // Speaker
+  const speechRow = cleanedRows(await fetchGViz("Speeches")).find(r=>r.Name===member) || {};
+  let speakerCount=0;
+  Object.entries(speechRow).forEach(([k,v])=>{
+    if(k==="Name"||k==="Points") return;
+    const d=parseHeaderDate(k); if(!d) return;
+    if(!inRange(d,start,end)) return;
+    if(v && String(v).trim()) speakerCount++;
+  });
+  if(speakerCount && (!roleFilter || roleFilter==="__ALL__" || roleFilter==="Speaker")) {
+    counts["Speaker"]=(counts["Speaker"]||0)+speakerCount;
+  }
+
+  // Evaluator
+  const evalRow = cleanedRows(await fetchGViz("Evaluations")).find(r=>r.Name===member) || {};
+  let evaluatorCount=0;
+  Object.entries(evalRow).forEach(([k,v])=>{
+    if(k==="Name"||k==="Points") return;
+    const d=parseHeaderDate(k); if(!d) return;
+    if(!inRange(d,start,end)) return;
+    const val=(typeof v==='string')?v.trim().toUpperCase():v;
+    if(val===true || val==="TRUE") evaluatorCount++;
+  });
+  if(evaluatorCount && (!roleFilter || roleFilter==="__ALL__" || roleFilter==="Evaluator")) {
+    counts["Evaluator"]=(counts["Evaluator"]||0)+evaluatorCount;
+  }
+
   const ctx = document.getElementById('roleChart').getContext('2d');
   if (roleChart) roleChart.destroy();
   roleChart = new Chart(ctx, {
@@ -365,59 +452,133 @@ async function drawRoleChart(member, start, end, roleFilter){
   });
 }
 
-// --- Cumulative Progress (activities over time across detail tabs) ---
+// Cumulative Progress — activity units over time
 async function drawCumulative(member, start, end, roleFilter){
-  // collect per-meeting "activity units" across all detail tabs
-  const buckets = {}; // dateLabel -> count
-  for (const tab of DETAIL_TABS){
-    const rows = await fetchGViz(tab);
-    const row = rows.find(r=>r.Name===member);
-    if(!row) continue;
-    Object.entries(row).forEach(([k,v])=>{
-      if(!v||k==="Name"||k==="Points") return;
-      const d = parseHeaderDate(k);
-      if(!d) return;
-      if(!inRange(d,start,end)) return;
-      const val = String(v).trim();
-      if(roleFilter && roleFilter!=="__ALL__" && tab==="Role Taking" && val !== roleFilter) return;
-      const lab = toLabel(d);
-      buckets[lab] = (buckets[lab]||0) + 1;
-    });
+  const buckets={}; // dateLabel -> count
+
+  // Role Taking (specific roles)
+  const roleRow = cleanedRows(await fetchGViz("Role Taking")).find(r=>r.Name===member) || {};
+  Object.entries(roleRow).forEach(([k,v])=>{
+    if(k==="Name"||k==="Points") return;
+    const d=parseHeaderDate(k); if(!d) return;
+    if(!inRange(d,start,end)) return;
+    const val=String(v||"").trim(); if(!val) return;
+    if(roleFilter && roleFilter!=="__ALL__" && roleFilter!=="Speaker" && roleFilter!=="Evaluator" && val!==roleFilter) return;
+    const lab=toLabel(d); buckets[lab]=(buckets[lab]||0)+1;
+  });
+
+  // Speaker
+  const speechRow = cleanedRows(await fetchGViz("Speeches")).find(r=>r.Name===member) || {};
+  Object.entries(speechRow).forEach(([k,v])=>{
+    if(k==="Name"||k==="Points") return;
+    const d=parseHeaderDate(k); if(!d) return;
+    if(!inRange(d,start,end)) return;
+    if(!(v && String(v).trim())) return;
+    if(roleFilter && roleFilter!=="__ALL__" && roleFilter!=="Speaker") return;
+    const lab=toLabel(d); buckets[lab]=(buckets[lab]||0)+1;
+  });
+
+  // Evaluator
+  const evalRow = cleanedRows(await fetchGViz("Evaluations")).find(r=>r.Name===member) || {};
+  Object.entries(evalRow).forEach(([k,v])=>{
+    if(k==="Name"||k==="Points") return;
+    const d=parseHeaderDate(k); if(!d) return;
+    if(!inRange(d,start,end)) return;
+    const val=(typeof v==='string')?v.trim().toUpperCase():v;
+    const isTrue=(val===true || val==="TRUE");
+    if(!isTrue) return;
+    if(roleFilter && roleFilter!=="__ALL__" && roleFilter!=="Evaluator") return;
+    const lab=toLabel(d); buckets[lab]=(buckets[lab]||0)+1;
+  });
+
+  // (Optional) count non-empty cells in other tabs when no specific role filter
+  if(!roleFilter || roleFilter==="__ALL__"){
+    for(const tab of ["Level Completions","Awards","External","Other","Last Minute Roles"]){
+      const row = cleanedRows(await fetchGViz(tab)).find(r=>r.Name===member) || {};
+      Object.entries(row).forEach(([k,v])=>{
+        if(k==="Name"||k==="Points") return;
+        const d=parseHeaderDate(k); if(!d) return;
+        if(!inRange(d,start,end)) return;
+        if(!(v && String(v).trim())) return;
+        const lab=toLabel(d); buckets[lab]=(buckets[lab]||0)+1;
+      });
+    }
   }
-  const sortedDates = Object.keys(buckets).sort();
+
+  const labels = Object.keys(buckets).sort();
   let cum=0;
-  const y = sortedDates.map(d=> (cum += buckets[d]));
+  const values = labels.map(d=> (cum += buckets[d]));
   const ctx = document.getElementById('cumulativeChart').getContext('2d');
   if (cumulativeChart) cumulativeChart.destroy();
   cumulativeChart = new Chart(ctx, {
     type:"line",
-    data:{ labels:sortedDates, datasets:[{label:"Cumulative Activities", data:y, fill:false}] },
-    options:{ responsive:true, plugins:{legend:{display:false}} }
+    data:{ labels, datasets:[{label:"Cumulative Activities", data:values, fill:false}] },
+    options:{ responsive:true, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}} }
   });
 }
 
-// --- Per-Meeting Details (cards) ---
+// ---------------- Per-Meeting Details ----------------
 async function renderMeetingDetails(member, start, end, roleFilter){
   const container = document.getElementById('meetingSummaries');
   container.innerHTML = "";
-  const byMeeting = {}; // dateLabel -> [ strings ]
+  const byMeeting = {};
 
-  for (const tab of DETAIL_TABS){
-    const rows = await fetchGViz(tab);
-    const row = rows.find(r=>r.Name===member);
-    if(!row) continue;
-    Object.entries(row).forEach(([k,v])=>{
-      if(!v||k==="Name"||k==="Points") return;
-      const d = parseHeaderDate(k);
-      if(!d) return;
-      if(!inRange(d,start,end)) return;
-      const val = String(v).trim();
-      if(roleFilter && roleFilter!=="__ALL__" && tab==="Role Taking" && val !== roleFilter) return;
-      const lab = toLabel(d);
-      if(!byMeeting[lab]) byMeeting[lab]=[];
-      byMeeting[lab].push(`${tab}: ${val}`);
-    });
+  // helper to push an item
+  function push(date, label){
+    const lab = toLabel(date);
+    if(!byMeeting[lab]) byMeeting[lab]=[];
+    byMeeting[lab].push(label);
   }
+
+  // Roles
+  const roleRow = cleanedRows(await fetchGViz("Role Taking")).find(r=>r.Name===member) || {};
+  Object.entries(roleRow).forEach(([k,v])=>{
+    if(k==="Name"||k==="Points") return;
+    const d=parseHeaderDate(k); if(!d) return;
+    if(!inRange(d,start,end)) return;
+    const val=String(v||"").trim(); if(!val) return;
+    if(roleFilter && roleFilter!=="__ALL__" && roleFilter!=="Speaker" && roleFilter!=="Evaluator" && val!==roleFilter) return;
+    push(d, `Role: ${val}`);
+  });
+
+  // Speeches
+  const speechRow = cleanedRows(await fetchGViz("Speeches")).find(r=>r.Name===member) || {};
+  Object.entries(speechRow).forEach(([k,v])=>{
+    if(k==="Name"||k==="Points") return;
+    const d=parseHeaderDate(k); if(!d) return;
+    if(!inRange(d,start,end)) return;
+    const val=String(v||"").trim(); if(!val) return;
+    if(roleFilter && roleFilter!=="__ALL__" && roleFilter!=="Speaker") return;
+    push(d, `Speaker: ${val}`);
+  });
+
+  // Evaluations
+  const evalRow = cleanedRows(await fetchGViz("Evaluations")).find(r=>r.Name===member) || {};
+  Object.entries(evalRow).forEach(([k,v])=>{
+    if(k==="Name"||k==="Points") return;
+    const d=parseHeaderDate(k); if(!d) return;
+    if(!inRange(d,start,end)) return;
+    const val=(typeof v==='string')?v.trim().toUpperCase():v;
+    const isTrue=(val===true || val==="TRUE");
+    if(!isTrue) return;
+    if(roleFilter && roleFilter!=="__ALL__" && roleFilter!=="Evaluator") return;
+    push(d, `Evaluator: ✓`);
+  });
+
+  // Other tabs when no specific role selected
+  if(!roleFilter || roleFilter==="__ALL__"){
+    for(const tab of ["Level Completions","Awards","External","Other","Last Minute Roles"]){
+      const row = cleanedRows(await fetchGViz(tab)).find(r=>r.Name===member) || {};
+      Object.entries(row).forEach(([k,v])=>{
+        if(k==="Name"||k==="Points") return;
+        const d=parseHeaderDate(k); if(!d) return;
+        if(!inRange(d,start,end)) return;
+        const val=String(v||"").trim(); if(!val) return;
+        push(d, `${tab}: ${val}`);
+      });
+    }
+  }
+
   const days = Object.keys(byMeeting).sort();
   if(!days.length){ container.innerHTML = "<p>No meeting activity for current filters.</p>"; return; }
   days.forEach(day=>{
@@ -429,46 +590,61 @@ async function renderMeetingDetails(member, start, end, roleFilter){
   });
 }
 
-// --- main recompute ---
+// ---------------- Recompute ----------------
 async function recomputeAll(){
   clearError();
   const member = document.getElementById('memberSelect').value;
-  const rf = document.getElementById('roleFilter').value;
+  const roleFilter = document.getElementById('roleFilter').value;
   const start = document.getElementById('startDate').value ? new Date(document.getElementById('startDate').value) : null;
   const end   = document.getElementById('endDate').value ? new Date(document.getElementById('endDate').value) : null;
 
-  await updateKPIs(member, start, end, rf);
+  await updateKPIs(member, start, end, roleFilter);
   await drawCategoryChart(member);
-  await drawRoleChart(member, start, end, rf);
-  await drawCumulative(member, start, end, rf);
-  await renderMeetingDetails(member, start, end, rf);
+  await drawRoleChart(member, start, end, roleFilter);
+  await drawCumulative(member, start, end, roleFilter);
+  await renderMeetingDetails(member, start, end, roleFilter);
 
-  // refresh raw table for active tab
+  // raw table for active tab
   const activeBtn = document.querySelector('.tab-btn.active');
   if (activeBtn){
-    const sheetName = activeBtn.dataset.sheet;
-    await loadDetailTable(sheetName, member);
+    await loadDetailTable(activeBtn.dataset.sheet, member);
   }
 }
 
-// --- init ---
+// ---------------- Date defaults (min/max) ----------------
+async function setDefaultDateRange(){
+  const roleRows = await fetchGViz("Role Taking");
+  const headers = dateColumnsFrom(roleRows);
+  const dates = headers.map(parseHeaderDate).filter(Boolean).sort((a,b)=>a-b);
+  if(!dates.length) return;
+  const min=dates[0], max=dates[dates.length-1];
+  const start = document.getElementById('startDate');
+  const end = document.getElementById('endDate');
+  start.value = toLabel(min);
+  end.value = toLabel(max);
+}
+
+// ---------------- Init ----------------
 document.addEventListener('DOMContentLoaded', async ()=>{
   try{
     await populateMembers();
     await populateRoleFilter();
-    // Default active tab already set to Total in markup
+    await setDefaultDateRange();
+    await buildLeaderboard();
+
+    // Default: load Total tab table
     const member = document.getElementById('memberSelect').value;
     await loadDetailTable('Total', member);
-    await buildLeaderboard();
+
+    // First compute all
     await recomputeAll();
 
-    // filters
+    // listeners
     document.getElementById('memberSelect').addEventListener('change', recomputeAll);
     document.getElementById('roleFilter').addEventListener('change', recomputeAll);
     document.getElementById('startDate').addEventListener('change', recomputeAll);
     document.getElementById('endDate').addEventListener('change', recomputeAll);
 
-    // tabs
     document.querySelectorAll('.tab-btn').forEach(btn=>{
       btn.addEventListener('click', async ()=>{
         document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
