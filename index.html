@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Toastmasters Dashboard</title>
+  <link rel="stylesheet" href="style.css" />
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- PapaParse for CSV -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+</head>
+<body>
+  <div class="container">
+    <h1>Toastmasters Club Dashboard</h1>
+
+    <!-- Leaderboard -->
+    <section>
+      <h2>Leaderboard</h2>
+      <canvas id="leaderboardChart"></canvas>
+    </section>
+
+    <!-- Member Progress -->
+    <section>
+      <h2>Member Progress</h2>
+      <label for="memberSelect">Select Member:</label>
+      <select id="memberSelect"></select>
+      <canvas id="progressChart"></canvas>
+    </section>
+
+    <!-- Per Meeting Summary -->
+    <section>
+      <h2>Meeting Summaries</h2>
+      <canvas id="meetingSummaryChart"></canvas>
+    </section>
+
+    <!-- Role Breakdown -->
+    <section>
+      <h2>Role Breakdown</h2>
+      <canvas id="roleBreakdownChart"></canvas>
+    </section>
+
+    <!-- Club Progress -->
+    <section>
+      <h2>Club Progress Over Time</h2>
+      <canvas id="clubProgressChart"></canvas>
+    </section>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
