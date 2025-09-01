@@ -133,108 +133,93 @@ header img {
 }
 
 
-/* === Toastmasters Full-Brand Styling === */
 
-/* Gentle animated gradient across the whole page (header + body) */
-@keyframes gradientBG {
+/* === Performance-friendly full-page gradient & UI fixes === */
+
+/* Full-viewport gradient on html, body transparent */
+@keyframes tmGradientShift {
   0% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
   100% { background-position: 0% 50%; }
 }
-html, body {
-  height: 100%;
+html, body { min-height: 100%; }
+html {
+  background: linear-gradient(-45deg, #772432, #002f6c, #772432, #002f6c);
+  background-size: 250% 250%;
+  animation: tmGradientShift 60s ease-in-out infinite;
+  will-change: background-position;
 }
+/* Respect users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  html { animation: none; }
+}
+
+/* Keep body transparent so gradient shows through */
 body {
   margin: 0;
-  min-height: 100vh;
-  background: linear-gradient(-45deg, #772432, #002f6c, #772432, #002f6c);
-  background-size: 400% 400%;
-  animation: gradientBG 28s ease infinite; /* gentle & slow */
+  background: transparent !important;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
-/* Make header transparent so the body gradient flows through */
+/* Header rides on the same background; remove expensive blur */
 header {
   background: transparent !important;
-  backdrop-filter: blur(2px);
 }
 
-/* Constrain header logo & keep header compact */
-header img, .club-logo img, .club-logo {
-  max-height: 60px;
-  height: auto;
-}
-
-/* Card / panel backgrounds readable atop gradient */
-.card, .panel, .content, .container, .wrapper, .kpi-card {
+/* Only cards/kpis get a subtle translucent backdrop (lighter shadow for perf) */
+.kpi-card, .card, .panel {
   background: rgba(255,255,255,0.92);
   border-radius: 12px;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.08);
 }
 
-/* KPI layout stays responsive */
-.kpi-cards {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
-}
-.kpi-card {
-  flex: 1 1 220px;
-  min-width: 180px;
-  padding: 12px 14px;
-}
+/* Do NOT blanket white-out containers; keep page visually connected to gradient */
+.content, .container, .wrapper { background: transparent !important; }
 
-/* DataTables brand polish */
+/* KPI responsive */
+.kpi-cards { display:flex; flex-wrap:wrap; gap:1rem; }
+.kpi-card { flex:1 1 220px; min-width:180px; padding:12px 14px; }
+
+/* DataTables: improve contrast/clarity of pagination numbers */
 table.dataTable thead th {
   background: #002f6c;
   color: #fff;
 }
-table.dataTable tbody tr:nth-child(even) {
-  background-color: #e9eff7; /* light navy tint */
-}
-table.dataTable tbody tr:hover {
-  background-color: #f2e8ea !important; /* light maroon tint */
-}
 .dataTables_wrapper .dataTables_paginate .paginate_button {
-  color: #002f6c !important;
-  border: 1px solid #d9dfe8 !important;
+  color: #172b4d !important;              /* dark readable text */
+  border: 1px solid #cfd7e3 !important;
   background: #ffffff !important;
   border-radius: 6px;
   margin: 0 2px;
-}
-.dataTables_wrapper .dataTables_paginate .paginate_button.current {
-  background: #002f6c !important;
-  color: #fff !important;
-}
-.dataTables_wrapper .dataTables_paginate .paginate_button:hover {
-  background: #772432 !important;
-  color: #fff !important;
-}
-.dataTables_wrapper .dataTables_filter input,
-.dataTables_wrapper .dataTables_length select {
-  border: 1px solid #c8cfda !important;
-  border-radius: 8px !important;
-  padding: 6px 10px !important;
-  background: #fff !important;
-}
-.dataTables_wrapper .dataTables_filter label, 
-.dataTables_wrapper .dataTables_length label {
-  color: #002f6c;
   font-weight: 600;
 }
+.dataTables_wrapper .dataTables_paginate .paginate_button.current {
+  background: #772432 !important;         /* maroon current */
+  color: #ffffff !important;
+  border-color: #772432 !important;
+}
+.dataTables_wrapper .dataTables_paginate .paginate_button:hover:not(.current) {
+  background: #f2e8ea !important;         /* light maroon tint */
+  color: #772432 !important;
+  border-color: #e6cfd5 !important;
+}
 
-/* Footer */
+/* Table stripes + hover */
+table.dataTable tbody tr:nth-child(even) { background-color: #eef3fb; } /* very light navy */
+table.dataTable tbody tr:hover { background-color: #f7eef0 !important; } /* very light maroon */
+
+/* Footer: transparent over gradient so it "extends"; keep text readable */
 .site-footer {
   margin-top: 24px;
-  background: #002f6c;
-  color: #fff;
+  background: transparent;                 /* let gradient show */
+  color: #ffffff;
   text-align: center;
-  padding: 10px 16px;
-  font-size: 0.9rem;
-  border-top-left-radius: 10px;
-  border-top-right-radius: 10px;
-  box-shadow: 0 -2px 6px rgba(0,0,0,0.1);
+  padding: 12px 16px;
+  font-size: 0.95rem;
+  border-top: 1px solid rgba(255,255,255,0.25);
+  text-shadow: 0 1px 2px rgba(0,0,0,0.35);
 }
+
 
 </style>
 </head>
