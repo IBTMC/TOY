@@ -95,13 +95,11 @@
     <div class="row">
       <div>
         <label for="memberSelect">Select member</label>
-        <select id="memberSelect"></select>
+        <select id="memberSelect"><option value="">— Select —</option></select>
       </div>
       <div>
         <label for="roleFilter">Filter by role (optional)</label>
-        <select id="roleFilter">
-          <option value="__ALL__">All roles</option>
-        </select>
+        <select id="roleFilter"><option value="__ALL__">All roles</option></select>
       </div>
       <div>
         <label for="startDate">Start date</label>
@@ -186,7 +184,8 @@ const CATEGORY_KEYS = ["Early Attendance","Role Taking","Speeches","Evaluations"
 const DETAIL_TABS = ["Role Taking","Speeches","Evaluations","Level Completions","Awards","ExCom & Sub.","Early Attendance","Other","Last Minute Roles"];
 
 /** cache per sheet to minimize calls */
-let cache = {};
+let cache = {};         // sheetName -> rows
+let cacheHeaders = {};  // sheetName -> column labels array
 let currentMode = "ALL"; // "ALL" or "MEMBER"
 
 /** ===== GViz fetch ==== **/
@@ -200,11 +199,19 @@ async function fetchGViz(sheetName){
   const json = JSON.parse(m[1]);
 
   const cols = (json.table.cols || []).map((c,i)=> c.label || `col${i}`);
+  cacheHeaders[sheetName] = cols.slice();
+
   const rows = (json.table.rows || []).map(r=>{
     const o={};
     (r.c||[]).forEach((cell,i)=>{
-      o[cols[i]] = cell ? (cell.f ?? cell.v ?? "") : "";
+      const label = cols[i];
+      const val = cell ? (cell.f ?? cell.v ?? "") : "";
+      o[label] = val;
+      // Special internal alias ONLY for "ExCom & Sub."
+      if(label === "ExCom & Sub.") o["ExCom_And_Sub"] = val;
     });
+    // Ensure alias exists even if column is missing in a particular row
+    if(o["ExCom_And_Sub"] === undefined) o["ExCom_And_Sub"] = o["ExCom & Sub."] ?? "";
     return o;
   });
 
@@ -236,8 +243,8 @@ function inRange(date, start, end){
 }
 function toISO(d){ return d.toISOString().slice(0,10); }
 function cleanedRows(rows){
-  // Drop the second header row (meeting # row) where Name is blank
-  return rows.filter(r => r.Name && String(r.Name).trim() !== "");
+  // Drop rows where Name is blank (second header row like meeting #)
+  return (rows||[]).filter(r => r.Name && String(r.Name).trim() !== "");
 }
 function dateColumnsFrom(rows){
   const sample = rows[0] || {};
@@ -247,7 +254,7 @@ function dateColumnsFrom(rows){
 /** ===== UI population ===== **/
 async function populateMembers(){
   const total = await fetchGViz("Total");
-  const members = total.map(r=>r.Name).filter(Boolean);
+  const members = Array.from(new Set(total.map(r=>String(r.Name||"").trim()).filter(Boolean))).sort((a,b)=>a.localeCompare(b));
   const sel = document.getElementById('memberSelect');
   sel.innerHTML = `<option value="">— Select —</option>` + members.map(m=>`<option value="${m}">${m}</option>`).join('');
 }
@@ -260,6 +267,7 @@ async function populateRoleFilter(){
   rtRows.forEach(row=>{
     Object.entries(row).forEach(([k,v])=>{
       if(k==="Name"||k==="Points") return;
+      if(!parseHeaderDate(k)) return;
       if(v && String(v).trim()) roleSet.add(String(v).trim());
     });
   });
@@ -270,6 +278,7 @@ async function populateRoleFilter(){
   spRows.forEach(row=>{
     Object.entries(row).forEach(([k,v])=>{
       if(k==="Name"||k==="Points") return;
+      if(!parseHeaderDate(k)) return;
       if(v && String(v).trim()) hasSpeaker=true;
     });
   });
@@ -281,6 +290,7 @@ async function populateRoleFilter(){
   evRows.forEach(row=>{
     Object.entries(row).forEach(([k,v])=>{
       if(k==="Name"||k==="Points") return;
+      if(!parseHeaderDate(k)) return;
       const val=(typeof v==='string')?v.trim().toUpperCase():v;
       if(val===true || val==="TRUE") hasEvaluator=true;
     });
@@ -310,7 +320,7 @@ async function updateKPIs(member, start, end, roleFilter){
   }
   document.getElementById('kpiPoints').textContent = points;
 
-  // Distinct Roles: unique set for member (or across all members in ALL mode)
+  // Distinct Roles set
   const distinct = new Set();
 
   // Role Taking roles
@@ -326,7 +336,7 @@ async function updateKPIs(member, start, end, roleFilter){
     });
   });
 
-  // Speaker
+  // Speaker via Speeches
   const spRows = cleanedRows(await fetchGViz("Speeches"));
   (member ? spRows.filter(r=>r.Name===member) : spRows).forEach(row=>{
     Object.entries(row).forEach(([k,v])=>{
@@ -339,7 +349,7 @@ async function updateKPIs(member, start, end, roleFilter){
     });
   });
 
-  // Evaluator
+  // Evaluator via Evaluations
   const evRows = cleanedRows(await fetchGViz("Evaluations"));
   (member ? evRows.filter(r=>r.Name===member) : evRows).forEach(row=>{
     Object.entries(row).forEach(([k,v])=>{
@@ -359,7 +369,6 @@ async function updateKPIs(member, start, end, roleFilter){
 
 /** ===== Leaderboard (Summary preferred) ===== **/
 async function buildLeaderboard(){
-  // Prefer Summary (already top scores), fallback to Total
   let rows = await fetchGViz("Summary");
   if(!rows || !rows.length) rows = await fetchGViz("Total");
 
@@ -380,18 +389,41 @@ async function buildLeaderboard(){
 }
 
 /** ===== Raw table tab ===== **/
+function buildColumnsForSheet(sheetName, rows){
+  if(!rows.length) return [];
+  const labels = Object.keys(rows[0]);
+
+  // Special case: internally use ExCom_And_Sub for data access, but show original label.
+  return labels.map(lbl=>{
+    if(sheetName==="Total" && lbl==="ExCom & Sub."){
+      return { title:"ExCom & Sub.", data:"ExCom_And_Sub" };
+    }
+    return { title: lbl, data: lbl };
+  });
+}
+
 async function loadDetailTable(sheetName, member){
-  const rows = sheetName === "Total" ? await fetchGViz("Total") : cleanedRows(await fetchGViz(sheetName));
+  const raw = await fetchGViz(sheetName);
+  const rows = (sheetName === "Total") ? raw : cleanedRows(raw);
   const filtered = member ? rows.filter(r=>r.Name===member) : rows;
 
   if ($.fn.DataTable.isDataTable("#detailTable")) {
     $("#detailTable").DataTable().destroy();
     $("#detailTable").empty();
   }
-  if (!filtered.length){ return; }
+  if (!filtered.length){
+    $("#detailTable").DataTable({ data: [], columns: [{title:"No data", data:null}], searching:false, paging:false, info:false });
+    return;
+  }
 
-  // Preserve column order from first row keys
-  const cols = Object.keys(filtered[0]).map(c=>({title:c,data:c}));
+  // Ensure alias field exists for all rows if needed
+  if(sheetName==="Total"){
+    filtered.forEach(r=>{
+      if(r["ExCom_And_Sub"] === undefined) r["ExCom_And_Sub"] = r["ExCom & Sub."] ?? "";
+    });
+  }
+
+  const cols = buildColumnsForSheet(sheetName, filtered);
   $("#detailTable").DataTable({
     data: filtered,
     columns: cols,
@@ -401,28 +433,26 @@ async function loadDetailTable(sheetName, member){
 
 /** ===== Charts ===== **/
 let categoryChart, roleChart, cumulativeChart;
-
 function resetChart(chart){ if(chart){ chart.destroy(); } }
 
-function categoryItemsFromTotal(totalRows, member){
-  // Build {label, value} from CATEGORY_KEYS
-  if(member){
-    const r = totalRows.find(x=>x.Name===member) || {};
-    return CATEGORY_KEYS.filter(k=>k in r).map(k=>({label:k, value:Number(r[k]||0)}));
-  }else{
-    // aggregate across all
-    const sums = {};
-    CATEGORY_KEYS.forEach(k=>sums[k]=0);
-    totalRows.forEach(r=>{
-      CATEGORY_KEYS.forEach(k=>{ if(k in r) sums[k]+=Number(r[k]||0); });
-    });
-    return CATEGORY_KEYS.map(k=>({label:k, value:sums[k]}));
-  }
-}
-
+// Category Breakdown from Total for selected member (or aggregate if none)
 async function drawCategoryChart(member){
   const total = await fetchGViz("Total");
-  const items = categoryItemsFromTotal(total, member);
+
+  let items;
+  if(member){
+    const r = total.find(x=>x.Name===member) || {};
+    items = CATEGORY_KEYS.filter(k=>k in r).map(k=>({label:k, value:Number(r[k]||0)}));
+  }else{
+    // aggregate across all members
+    const sums = {};
+    CATEGORY_KEYS.forEach(k=>sums[k]=0);
+    total.forEach(r=>{
+      CATEGORY_KEYS.forEach(k=>{ if(k in r) sums[k]+=Number(r[k]||0); });
+    });
+    items = CATEGORY_KEYS.map(k=>({label:k, value:sums[k]}));
+  }
+
   const ctx = document.getElementById('categoryChart').getContext('2d');
   resetChart(categoryChart);
   categoryChart = new Chart(ctx, {
@@ -435,8 +465,7 @@ async function drawCategoryChart(member){
 // Role Breakdown Pie
 async function drawRoleChart(member, start, end, roleFilter){
   const counts={};
-
-  function addCount(role){ counts[role]=(counts[role]||0)+1; }
+  const addCount = (role)=>{ counts[role]=(counts[role]||0)+1; };
 
   // Role Taking
   const rtRows = cleanedRows(await fetchGViz("Role Taking"));
@@ -490,8 +519,7 @@ async function drawRoleChart(member, start, end, roleFilter){
 // Cumulative Progress (activity units over time)
 async function drawCumulative(member, start, end, roleFilter){
   const buckets={}; // dateLabel -> count
-
-  function bump(date){ const lab=toISO(date); buckets[lab]=(buckets[lab]||0)+1; }
+  const bump = (d)=>{ const key=toISO(d); buckets[key]=(buckets[key]||0)+1; };
 
   // Role Taking
   const rtRows = cleanedRows(await fetchGViz("Role Taking"));
@@ -533,7 +561,7 @@ async function drawCumulative(member, start, end, roleFilter){
     });
   });
 
-  // Other tabs counted only when no specific role filter
+  // Other tabs when no specific role filter
   if(!roleFilter || roleFilter==="__ALL__"){
     for(const tab of ["Level Completions","Awards","ExCom & Sub.","Early Attendance","Other","Last Minute Roles"]){
       const rows = cleanedRows(await fetchGViz(tab));
@@ -648,7 +676,6 @@ async function recomputeAll(){
     if(roleChart) roleChart.destroy();
     if(cumulativeChart) cumulativeChart.destroy();
     document.getElementById('meetingSummaries').innerHTML = "<p>Select a member to see details.</p>";
-    // Keep Leaderboard visible
   }else{
     await updateKPIs(member || null, start, end, roleFilter);
     await drawCategoryChart(member || null);
@@ -676,6 +703,15 @@ async function setDefaultDateRange(){
 /** ===== init ===== **/
 document.addEventListener('DOMContentLoaded', async ()=>{
   try{
+    // Preload everything needed for filters first
+    await Promise.all([
+      fetchGViz("Total"),
+      fetchGViz("Role Taking"),
+      fetchGViz("Speeches"),
+      fetchGViz("Evaluations"),
+      fetchGViz("Summary")
+    ]);
+
     await populateMembers();
     await populateRoleFilter();
     await setDefaultDateRange();
