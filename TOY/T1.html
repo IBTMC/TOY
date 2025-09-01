@@ -9,6 +9,7 @@
   <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
   <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css">
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 </head>
 <body class="bg-gray-100 font-sans">
   <!-- Header -->
@@ -53,12 +54,6 @@
       </div>
     </div>
 
-    <!-- Role Breakdown Pie Chart -->
-    <div class="bg-white p-4 rounded shadow mb-6">
-      <h2 class="text-lg font-bold mb-2">Role Breakdown</h2>
-      <canvas id="rolePieChart"></canvas>
-    </div>
-
     <!-- Tabs for details -->
     <div class="mb-4">
       <div class="flex flex-wrap gap-2 mb-2">
@@ -76,209 +71,77 @@
     </div>
 
     <!-- Leaderboard -->
-    <div class="bg-white p-4 rounded shadow mb-6">
+    <div class="bg-white p-4 rounded shadow">
       <h2 class="text-lg font-bold mb-2">Club Leaderboard</h2>
       <table id="leaderboard" class="display w-full"></table>
     </div>
-
-    <!-- Extended Progress Chart -->
-    <div class="bg-white p-4 rounded shadow mb-6">
-      <h2 class="text-lg font-bold mb-2">Extended Progress (All Categories)</h2>
-      <canvas id="extendedProgressChart"></canvas>
-    </div>
-
-    <!-- Meeting Summaries -->
-    <div class="bg-white p-4 rounded shadow">
-      <h2 class="text-lg font-bold mb-2">Meeting Summaries</h2>
-      <table id="meetingSummaries" class="display w-full"></table>
-    </div>
   </main>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
   <script>
     const SHEET_ID = "19x7OzxLlfG5YarEgksoX-drLaf12Ci98JpYkBvQpoMI";
-    const SHEETS = {
-      summary: "Summary",
-      total: "Total",
-      roles: "Role Taking",
-      speeches: "Speeches",
-      evaluations: "Evaluations",
-      tablet: "Table Topics",
-      early: "Early Attendance",
-      awards: "Awards",
-      external: "External",
-      other: "Other",
-      lastminute: "Last Minute Roles"
-    };
 
     async function fetchSheet(sheetName) {
       const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}&cachebuster=${new Date().getTime()}`;
       const response = await fetch(url);
       const text = await response.text();
-      return Papa.parse(text, { header: true }).data.filter(row => Object.values(row).some(val => val !== ""));
+      return Papa.parse(text, { header: true }).data;
     }
-
-    let detailTable;
-    let leaderboardTable;
-    let meetingSummariesTable;
-    let categoryChart;
-    let progressChart;
-    let extendedProgressChart;
-    let rolePieChart;
 
     async function loadSummary() {
-      const data = await fetchSheet(SHEETS.summary);
+      const summaryData = await fetchSheet("Summary");
+      const members = summaryData.map(r => r.Name).filter(Boolean);
       const memberSelect = document.getElementById("memberSelect");
-      memberSelect.innerHTML = data.map(row => `<option value="${row.Name}">${row.Name}</option>`).join("");
-
-      // Leaderboard
-      if (leaderboardTable) leaderboardTable.destroy();
-      leaderboardTable = $('#leaderboard').DataTable({
-        data: data,
-        columns: Object.keys(data[0]).map(key => ({ title: key, data: key }))
-      });
-    }
-
-    async function loadTotal(member) {
-      const data = await fetchSheet(SHEETS.total);
-      const row = data.find(r => r.Name === member);
-      if (!row) return;
-
-      document.getElementById("totalPoints").textContent = row.Total;
-
-      const categories = Object.keys(row).filter(k => k !== "Name" && k !== "Total");
-      const values = categories.map(c => parseInt(row[c] || 0));
-
-      if (categoryChart) categoryChart.destroy();
-      categoryChart = new Chart(document.getElementById("categoryChart"), {
-        type: 'bar',
-        data: { labels: categories, datasets: [{ label: 'Points', data: values, backgroundColor: '#772432' }] },
-        options: { responsive: true, plugins: { legend: { display: false } } }
-      });
+      memberSelect.innerHTML = members.map(m => `<option value="${m}">${m}</option>`).join("");
     }
 
     async function loadDetail(sheetName, member) {
       const data = await fetchSheet(sheetName);
       const filtered = data.filter(r => r.Name === member);
-
-      if (detailTable) detailTable.destroy();
-      detailTable = $('#detailTable').DataTable({
-        data: filtered,
-        columns: Object.keys(filtered[0] || {}).map(key => ({ title: key, data: key }))
-      });
-
-      if (sheetName === SHEETS.roles) {
-        const roleCounts = {};
-        filtered.forEach(r => {
-          if (r.Role) roleCounts[r.Role] = (roleCounts[r.Role] || 0) + 1;
-        });
-        if (rolePieChart) rolePieChart.destroy();
-        rolePieChart = new Chart(document.getElementById("rolePieChart"), {
-          type: 'pie',
-          data: { labels: Object.keys(roleCounts), datasets: [{ data: Object.values(roleCounts), backgroundColor: ['#004165','#772432','#D9B310','#006747','#FF6F61','#6A1B9A','#FF8F00','#00838F','#C62828'] }] },
-          options: { responsive: true }
-        });
+      if ($.fn.DataTable.isDataTable("#detailTable")) {
+        $("#detailTable").DataTable().destroy();
+        $("#detailTable").empty();
       }
+      $("#detailTable").DataTable({ data: filtered, columns: Object.keys(data[0] || {}).map(c => ({ title: c, data: c })) });
     }
 
-    async function loadExtendedProgress(member) {
-      const datasets = [];
-      const colors = {
-        roles: '#004165',
-        speeches: '#772432',
-        evaluations: '#D9B310',
-        tablet: '#006747',
-        early: '#FF6F61',
-        awards: '#6A1B9A',
-        external: '#FF8F00',
-        other: '#00838F',
-        lastminute: '#C62828'
-      };
-
-      for (let [key, sheetName] of Object.entries(SHEETS)) {
-        if (key === 'summary' || key === 'total') continue;
-        const data = await fetchSheet(sheetName);
-        const filtered = data.filter(r => r.Name === member);
-        const progress = {};
-        filtered.forEach(r => {
-          if (r.Date) {
-            const date = new Date(r.Date);
-            progress[date] = (progress[date] || 0) + (parseInt(r.Points || 1));
-          }
-        });
-        const sortedDates = Object.keys(progress).sort((a,b) => new Date(a)-new Date(b));
-        let cumulative = 0;
-        const points = sortedDates.map(d => { cumulative += progress[d]; return {x:new Date(d), y:cumulative}; });
-
-        datasets.push({
-          label: sheetName,
-          data: points,
-          borderColor: colors[key],
-          fill: false,
-          tension: 0.1
-        });
+    async function loadTotal(member) {
+      const totals = await fetchSheet("Total");
+      const row = totals.find(r => r.Name === member);
+      if (row) {
+        document.getElementById("totalPoints").textContent = row.Total || "0";
+        document.getElementById("meetingCount").textContent = row.Meetings || "0";
+        document.getElementById("roleCount").textContent = row.Roles || "0";
       }
-
-      if (extendedProgressChart) extendedProgressChart.destroy();
-      extendedProgressChart = new Chart(document.getElementById("extendedProgressChart"), {
-        type: 'line',
-        data: { datasets },
-        options: { responsive: true, parsing: false, scales: { x: { type: 'time', time: { unit: 'month' } } } }
-      });
-    }
-
-    async function loadMeetingSummaries() {
-      const allData = [];
-      for (let [key, sheetName] of Object.entries(SHEETS)) {
-        if (key === 'summary' || key === 'total') continue;
-        const data = await fetchSheet(sheetName);
-        data.forEach(r => {
-          if (r.Date) {
-            allData.push({
-              Date: r.Date,
-              Name: r.Name,
-              Category: sheetName,
-              Role: r.Role || r.Speech || r.Activity || '',
-              Points: r.Points || 1
-            });
-          }
-        });
-      }
-      if (meetingSummariesTable) meetingSummariesTable.destroy();
-      meetingSummariesTable = $('#meetingSummaries').DataTable({
-        data: allData,
-        order: [[0, 'asc']],
-        columns: [
-          { title: "Date", data: "Date" },
-          { title: "Name", data: "Name" },
-          { title: "Category", data: "Category" },
-          { title: "Role/Activity", data: "Role" },
-          { title: "Points", data: "Points" }
-        ]
-      });
     }
 
     document.addEventListener("DOMContentLoaded", async () => {
       await loadSummary();
       const memberSelect = document.getElementById("memberSelect");
       const initialMember = memberSelect.value;
-      await loadTotal(initialMember);
-      await loadDetail(SHEETS.roles, initialMember);
-      await loadExtendedProgress(initialMember);
-      await loadMeetingSummaries();
 
+      // Set default active tab (Roles)
+      const defaultBtn = document.querySelector(".tab-btn[data-sheet='Role Taking']");
+      defaultBtn.classList.add("bg-[#004165]", "text-white");
+      defaultBtn.classList.remove("bg-gray-300");
+
+      await loadTotal(initialMember);
+      await loadDetail("Role Taking", initialMember);
+
+      // Member change listener
       memberSelect.addEventListener("change", async e => {
         const member = e.target.value;
         await loadTotal(member);
         const activeSheet = document.querySelector(".tab-btn.bg-[#004165]").dataset.sheet;
         await loadDetail(activeSheet, member);
-        await loadExtendedProgress(member);
       });
 
+      // Tab button click listeners
       document.querySelectorAll(".tab-btn").forEach(btn => {
         btn.addEventListener("click", async () => {
-          document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("bg-[#004165]", "text-white"));
-          document.querySelectorAll(".tab-btn").forEach(b => b.classList.add("bg-gray-300"));
+          document.querySelectorAll(".tab-btn").forEach(b => {
+            b.classList.remove("bg-[#004165]", "text-white");
+            b.classList.add("bg-gray-300");
+          });
           btn.classList.add("bg-[#004165]", "text-white");
           btn.classList.remove("bg-gray-300");
 
