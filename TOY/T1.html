@@ -2,99 +2,129 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Toastmasters Club Dashboard</title>
-  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
-  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-  <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <title>Toastmasters Dashboard</title>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css"/>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    body { font-family: Arial, sans-serif; margin: 20px; background: #f4f4f4; }
-    header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-    header img { height: 60px; }
-    h1 { color: #004165; text-align: center; flex: 1; }
-    .controls { margin: 20px 0; text-align: center; }
-    select { padding: 5px; }
-    .tabs { text-align: center; margin-bottom: 20px; }
-    .tab-btn {
-      padding: 10px 15px; margin: 3px; border: none;
-      border-radius: 5px; cursor: pointer;
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f4f4;
+      margin: 0; padding: 0;
     }
-    .active-tab { background: #004165; color: #fff; }
-    .inactive-tab { background: #ccc; color: #333; }
-    #charts { display: flex; justify-content: space-around; flex-wrap: wrap; }
-    #charts canvas { background: #fff; padding: 10px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin: 10px; }
-    #meetingSummaries { margin-top: 30px; }
+    header {
+      background: #004165;
+      color: #fff;
+      padding: 15px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    header img {
+      height: 40px;
+    }
+    .container {
+      padding: 20px;
+    }
+    select {
+      padding: 8px;
+      font-size: 16px;
+      margin-bottom: 20px;
+    }
+    .tabs {
+      margin-bottom: 15px;
+    }
+    .tab-btn {
+      background: #d71a28;
+      border: none;
+      color: white;
+      padding: 8px 15px;
+      margin-right: 5px;
+      cursor: pointer;
+      border-radius: 5px;
+    }
+    .tab-btn.active-tab {
+      background: #004165;
+    }
+    .chart-container {
+      background: #fff;
+      padding: 15px;
+      margin-top: 20px;
+      border-radius: 10px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    #meetingSummaries > div {
+      margin-bottom: 12px;
+      padding: 10px;
+      background: #fff;
+      border-radius: 6px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
   </style>
 </head>
 <body>
-  <header>
-    <img src="https://www.toastmasters.org/-/media/toastmastersweb/icons/tm-logo-color.ashx" alt="Toastmasters International Logo">
-    <h1>Toastmasters Club Dashboard</h1>
-    <img src="YOUR_CLUB_LOGO.png" alt="Club Logo">
-  </header>
-
-  <div class="controls">
-    <label for="memberSelect"><strong>Select Member:</strong></label>
-    <select id="memberSelect"></select>
+<header>
+  <div>
+    <img src="https://www.toastmasters.org/-/media/toastmasters/brand-portal/files/logos/official-logo/primary-logo/primary-logo-color.ashx" alt="Toastmasters Logo"/>
+    <img src="club-logo.png" alt="Club Logo"/> <!-- Replace with your club logo -->
   </div>
+  <h2>Toastmasters Club Dashboard</h2>
+</header>
+
+<div class="container">
+  <label for="memberSelect"><strong>Select Member:</strong></label>
+  <select id="memberSelect"></select>
 
   <div class="tabs">
-    <button class="tab-btn inactive-tab" data-sheet="Total">Total</button>
-    <button class="tab-btn inactive-tab" data-sheet="Role Taking">Roles</button>
-    <button class="tab-btn inactive-tab" data-sheet="Speeches">Speeches</button>
-    <button class="tab-btn inactive-tab" data-sheet="Evaluations">Evaluations</button>
-    <button class="tab-btn inactive-tab" data-sheet="Level Completions">Level Completions</button>
-    <button class="tab-btn inactive-tab" data-sheet="Awards">Awards</button>
-    <button class="tab-btn inactive-tab" data-sheet="External">External</button>
-    <button class="tab-btn inactive-tab" data-sheet="Other">Other</button>
-    <button class="tab-btn inactive-tab" data-sheet="Last Minute Roles">Last Minute Roles</button>
+    <button class="tab-btn" data-sheet="Total">Total</button>
+    <button class="tab-btn" data-sheet="Role Taking">Roles</button>
+    <button class="tab-btn" data-sheet="Speeches">Speeches</button>
+    <button class="tab-btn" data-sheet="Evaluations">Evaluations</button>
+    <button class="tab-btn" data-sheet="Level Completions">Level Completions</button>
+    <button class="tab-btn" data-sheet="Awards">Awards</button>
+    <button class="tab-btn" data-sheet="External">External</button>
+    <button class="tab-btn" data-sheet="Other">Other</button>
+    <button class="tab-btn" data-sheet="Last Minute Roles">Last Minute Roles</button>
   </div>
 
   <table id="detailTable" class="display" style="width:100%"></table>
 
-  <div id="charts">
-    <canvas id="progressChart" width="400" height="250"></canvas>
-    <canvas id="roleBreakdownChart" width="400" height="250"></canvas>
+  <div class="chart-container">
+    <h3>Progress Over Time</h3>
+    <canvas id="progressChart"></canvas>
   </div>
 
-  <h2>Meeting Summaries</h2>
-  <div id="meetingSummaries"></div>
+  <div class="chart-container">
+    <h3>Role Breakdown</h3>
+    <canvas id="roleBreakdownChart"></canvas>
+  </div>
+
+  <div class="chart-container">
+    <h3>Meeting Summaries</h3>
+    <div id="meetingSummaries"></div>
+  </div>
+</div>
 
 <script>
 const SHEET_ID = "19x7OzxLlfG5YarEgksoX-drLaf12Ci98JpYkBvQpoMI";
 
-// Fetch sheet
+// Generic fetcher (returns array of objects)
 async function fetchSheet(sheetName) {
-  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}&cachebuster=${new Date().getTime()}`;
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?sheet=${encodeURIComponent(sheetName)}&tq=select *`;
   const response = await fetch(url);
   const text = await response.text();
-
-  if (sheetName === "Total") {
-    return Papa.parse(text, { header: true }).data.filter(r => r.Name);
-  }
-
-  const parsed = Papa.parse(text, { header: false }).data;
-  if (!parsed.length) return [];
-
-  const headers = parsed[0];
-  const subHeaders = parsed[1] || [];
-  const finalHeaders = headers.map((h, i) => {
-    if (subHeaders[i] && subHeaders[i] !== "") return `${h} ${subHeaders[i]}`.trim();
-    return h;
+  const json = JSON.parse(text.substr(47).slice(0, -2));
+  const cols = json.table.cols.map(c => c.label || "");
+  const rows = json.table.rows.map(r => {
+    const obj = {};
+    r.c.forEach((cell, i) => obj[cols[i] || `col${i}`] = cell ? cell.v : "");
+    return obj;
   });
-
-  const dataRows = parsed.slice(2);
-  return dataRows
-    .filter(r => r[0] && r[0].trim() !== "")
-    .map(row => {
-      const obj = {};
-      finalHeaders.forEach((h, i) => { obj[h] = row[i]; });
-      return obj;
-    });
+  return rows;
 }
 
-// Populate members (from Total)
+// Populate member dropdown
 async function loadMembers() {
   const totalData = await fetchSheet("Total");
   const members = totalData.map(r => r.Name).filter(Boolean);
@@ -102,7 +132,7 @@ async function loadMembers() {
   memberSelect.innerHTML = members.map(m => `<option value="${m}">${m}</option>`).join("");
 }
 
-// Load details
+// Load detail table
 async function loadDetail(sheetName, member) {
   const data = await fetchSheet(sheetName);
   const filtered = data.filter(r => r.Name === member);
@@ -121,8 +151,8 @@ async function loadDetail(sheetName, member) {
   }
 }
 
-// Line chart from Total
-async function loadExtendedProgress(member) {
+// Progress chart (line from Total)
+async function loadProgress(member) {
   const totalData = await fetchSheet("Total");
   const row = totalData.find(r => r.Name === member);
   if (!row) return;
@@ -134,14 +164,11 @@ async function loadExtendedProgress(member) {
   if (window.progressChart) window.progressChart.destroy();
   window.progressChart = new Chart(ctx, {
     type: "line",
-    data: {
-      labels,
-      datasets: [{ label: "Points", data: values, fill: false, borderColor: "#004165" }]
-    }
+    data: { labels, datasets: [{ label: "Points", data: values, fill: false, borderColor: "#004165" }] }
   });
 }
 
-// Pie chart from Role Taking
+// Role breakdown pie chart
 async function loadRoleBreakdown(member) {
   const roleData = await fetchSheet("Role Taking");
   const row = roleData.find(r => r.Name === member);
@@ -149,7 +176,7 @@ async function loadRoleBreakdown(member) {
 
   const roleCounts = {};
   Object.keys(row).forEach(key => {
-    if (key.startsWith("Name") || key.startsWith("Points")) return;
+    if (key === "Name" || key === "Points") return;
     const value = row[key];
     if (value && value.trim() !== "") {
       roleCounts[value] = (roleCounts[value] || 0) + 1;
@@ -162,32 +189,26 @@ async function loadRoleBreakdown(member) {
     type: "pie",
     data: {
       labels: Object.keys(roleCounts),
-      datasets: [{
-        data: Object.values(roleCounts),
-        backgroundColor: [
-          "#004165", "#d71a28", "#f2df74", "#007A5E", "#7A003C",
-          "#ff9933", "#3399ff", "#9933ff", "#66cc99", "#ffcc00"
-        ]
-      }]
+      datasets: [{ data: Object.values(roleCounts), backgroundColor: ["#004165","#d71a28","#f2df74","#007A5E","#7A003C","#ff9933","#3399ff","#9933ff","#66cc99","#ffcc00"] }]
     },
     options: { plugins: { legend: { position: "bottom" } } }
   });
 }
 
-// Meeting Summaries
+// Meeting summaries
 async function loadMeetingSummaries(member) {
-  const tabs = ["Role Taking", "Speeches", "Evaluations", "Level Completions", "Awards", "External", "Other", "Last Minute Roles"];
+  const tabs = ["Role Taking","Speeches","Evaluations","Level Completions","Awards","External","Other","Last Minute Roles"];
   const container = document.getElementById("meetingSummaries");
   container.innerHTML = "";
-
   const meetingData = {};
+
   for (const tab of tabs) {
     const data = await fetchSheet(tab);
     const row = data.find(r => r.Name === member);
     if (!row) continue;
 
     Object.keys(row).forEach(key => {
-      if (key.startsWith("Name") || key.startsWith("Points")) return;
+      if (key === "Name" || key === "Points") return;
       const value = row[key];
       if (value && value.trim() !== "") {
         if (!meetingData[key]) meetingData[key] = [];
@@ -198,24 +219,14 @@ async function loadMeetingSummaries(member) {
 
   Object.keys(meetingData).forEach(meeting => {
     const div = document.createElement("div");
-    div.style.marginBottom = "15px";
-    div.style.padding = "10px";
-    div.style.background = "#fff";
-    div.style.borderRadius = "8px";
-    div.style.boxShadow = "0 2px 4px rgba(0,0,0,0.1)";
-
-    div.innerHTML = `<strong>${meeting}</strong><ul>` +
-      meetingData[meeting].map(item => `<li>${item}</li>`).join("") +
-      `</ul>`;
+    div.innerHTML = `<strong>${meeting}</strong><ul>` + meetingData[meeting].map(item => `<li>${item}</li>`).join("") + `</ul>`;
     container.appendChild(div);
   });
 
-  if (!Object.keys(meetingData).length) {
-    container.innerHTML = "<p>No meeting activity found for this member.</p>";
-  }
+  if (!Object.keys(meetingData).length) container.innerHTML = "<p>No meeting activity found.</p>";
 }
 
-// Init
+// Initialization
 document.addEventListener("DOMContentLoaded", async () => {
   await loadMembers();
   const memberSelect = document.getElementById("memberSelect");
@@ -224,10 +235,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Default tab = Total
   const defaultBtn = document.querySelector(".tab-btn[data-sheet='Total']");
   defaultBtn.classList.add("active-tab");
-  defaultBtn.classList.remove("inactive-tab");
-
   await loadDetail("Total", initialMember);
-  await loadExtendedProgress(initialMember);
+  await loadProgress(initialMember);
   await loadRoleBreakdown(initialMember);
   await loadMeetingSummaries(initialMember);
 
@@ -236,7 +245,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const member = e.target.value;
     const activeSheet = document.querySelector(".tab-btn.active-tab").dataset.sheet;
     await loadDetail(activeSheet, member);
-    await loadExtendedProgress(member);
+    await loadProgress(member);
     await loadRoleBreakdown(member);
     await loadMeetingSummaries(member);
   });
@@ -244,13 +253,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Tab switching
   document.querySelectorAll(".tab-btn").forEach(btn => {
     btn.addEventListener("click", async () => {
-      document.querySelectorAll(".tab-btn").forEach(b => {
-        b.classList.remove("active-tab");
-        b.classList.add("inactive-tab");
-      });
+      document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active-tab"));
       btn.classList.add("active-tab");
-      btn.classList.remove("inactive-tab");
-
       const member = memberSelect.value;
       await loadDetail(btn.dataset.sheet, member);
       await loadMeetingSummaries(member);
