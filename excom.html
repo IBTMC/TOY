@@ -99,43 +99,23 @@
   footer.tmftr a { color:#fff; text-decoration:none; border-bottom:1px dotted rgba(255,255,255,.6); }
   footer.tmftr a:hover { color:var(--tm-maroon); }
 
+/* === Targeted fixes === */
 /* Squeeze Per-meeting Details table */
-#perMeetingTable th, #perMeetingTable td {
+#detailTable th, #detailTable td {
   padding: 4px 6px;
   font-size: 13px;
   white-space: nowrap;
 }
-@media (max-width:600px) {
-  #perMeetingTable th, #perMeetingTable td {
+@media (max-width: 600px) {
+  #detailTable th, #detailTable td {
     font-size: 12px;
     padding: 3px 4px;
   }
-}
-
-
-/* Fix logo overlapping header text */
-.tmhdr {
-  position: relative;
-  text-align: center;
-  padding: 12px 0;
-}
-.tmhdr .logo {
-  position: absolute;
-  left: 16px;
-  top: 50%;
-  transform: translateY(-50%);
-  height: 40px;
-  width: auto;
-}
-@media (max-width: 480px) {
-  .tmhdr .logo {
-    height: 28px;
-    left: 8px;
-  }
-  .tmhdr h1 {
-    font-size: 16px;
-    margin: 0 36px;
-  }
+  /* Stack the Awards/Levels grid to a single column on phones */
+  #profileTwoCol { grid-template-columns: 1fr !important; }
+  /* Header logo + title no overlap */
+  .tmhdr .logo { height: 28px; left: 8px; }
+  .tmhdr h1 { font-size: 16px; margin: 0 40px; }
 }
 
 </style>
@@ -198,16 +178,17 @@
     <h3 style="margin:16px 0 8px;">Per-Meeting Details</h3>
     <table id="detailTable" class="display" style="width:100%"></table>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px;">
-      <div>
-        <h3 style="margin:0 0 8px;">Level Completions</h3>
-        <table id="levelsTable" class="display" style="width:100%"></table>
-      </div>
+    <div id="profileTwoCol" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px;">
       <div>
         <h3 style="margin:0 0 8px;">Awards</h3>
         <table id="awardsTable" class="display" style="width:100%"></table>
       </div>
-    </div>
+    <div>
+        <h3 style="margin:0 0 8px;">Level Completions</h3>
+        <table id="levelsTable" class="display" style="width:100%"></table>
+      </div>
+      
+      </div>
   </section>
 
   <section id="tab-club" class="card tab-content" style="display:none;">
