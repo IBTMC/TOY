@@ -669,6 +669,77 @@ footer a:hover {
 }
 
 </style>
+
+<style>
+/* Center align numeric columns */
+.dt-center { text-align: center; }
+</style>
+
+
+<style>
+/* Center-align KPI numbers */
+.kpi-card, .kpi-card h3, .kpi-card p, 
+#meetingsCount, #filteredPoints, #distinctRoles, #totalPointsAll {
+    text-align: center !important;
+}
+</style>
+
+
+<style>
+/* Enhance KPI numbers */
+.kpi-card h3,
+#meetingsCount, #filteredPoints, #distinctRoles, #totalPointsAll {
+    font-size: 1.6em !important;
+    font-weight: bold !important;
+    color: #800000; /* Toastmasters Maroon */
+}
+.kpi-card p {
+    font-size: 0.9em;
+    opacity: 0.9;
+}
+</style>
+
+
+<style>
+/* KPI card styling with subtle shadows and hover effect */
+.kpi-card {
+    background: rgba(255,255,255,0.9);
+    border-radius: 10px;
+    padding: 15px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.kpi-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+}
+</style>
+
+
+<style>
+/* DataTables card-like styling */
+.dataTables_wrapper {
+    margin-top: 20px;
+    margin-bottom: 30px;
+    padding: 15px;
+    background: rgba(255,255,255,0.95);
+    border-radius: 12px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    overflow-x: auto;
+}
+.dataTables_wrapper table.dataTable {
+    border-radius: 8px;
+    overflow: hidden;
+}
+.dataTables_wrapper table.dataTable thead th {
+    background-color: #002855; /* Toastmasters Navy */
+    color: white;
+}
+.dataTables_wrapper table.dataTable tbody tr:hover {
+    background-color: rgba(128,0,0,0.05); /* subtle maroon hover */
+}
+</style>
+
 </head>
 <body>
 <div id="errorBanner">⚠️ Failed to load data. Please check your internet connection or Google Sheets permissions.</div>
@@ -917,6 +988,7 @@ function buildLeaderboard(){
       {title:"Name", data:"Name"},
       {title:"Points", data:"Points", render:d=>parseInt(d||0)}
     ],
+    columnDefs: [{ targets: [1], className: "dt-center" }],
     order:[[1,"desc"]],
     pageLength:25
   });
@@ -1138,6 +1210,7 @@ function recomputeAndRender(){
       {title:"Level Completion", data:"Level"},
       {title:"Points", data:"Points"}
     ],
+    columnDefs: [{ targets: [2], className: "dt-center" }],
     order:[[0,"asc"]],
     pageLength:10,
     searching:false
@@ -1158,6 +1231,7 @@ function recomputeAndRender(){
       {title:"Award", data:"Award"},
       {title:"Points", data:"Points"}
     ],
+    columnDefs: [{ targets: [2], className: "dt-center" }],
     order:[[0,"asc"]],
     pageLength:10,
     searching:false
